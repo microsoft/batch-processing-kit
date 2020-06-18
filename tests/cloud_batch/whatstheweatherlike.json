@@ -1,0 +1,78 @@
+{
+  "AudioFileResults": [
+    {
+      "AudioFileName": "Channel.0.wav",
+      "AudioFileUrl": null,
+      "AudioLengthInSeconds": 2.03,
+      "CombinedResults": [
+        {
+          "ChannelNumber": null,
+          "Lexical": "what's the weather like",
+          "ITN": "what's the weather like",
+          "MaskedITN": "What's the weather like",
+          "Display": "What's the weather like?"
+        }
+      ],
+      "SegmentResults": [
+        {
+          "RecognitionStatus": "Success",
+          "ChannelNumber": null,
+          "SpeakerId": "1",
+          "Offset": 600000,
+          "Duration": 13000000,
+          "OffsetInSeconds": 0.06,
+          "DurationInSeconds": 1.3,
+          "NBest": [
+            {
+              "Confidence": 0.976708233,
+              "Lexical": "what's the weather like",
+              "ITN": "what's the weather like",
+              "MaskedITN": "What's the weather like",
+              "Display": "What's the weather like?",
+              "Sentiment": {
+                "Negative": 0.2062,
+                "Neutral": 0.793779,
+                "Positive": 0.0
+              },
+              "Words": [
+                {
+                  "Word": "what's",
+                  "Offset": 600000,
+                  "Duration": 3800000,
+                  "OffsetInSeconds": 0.06,
+                  "DurationInSeconds": 0.0,
+                  "Confidence": 0.975028
+                },
+                {
+                  "Word": "the",
+                  "Offset": 4400000,
+                  "Duration": 1400000,
+                  "OffsetInSeconds": 0.44,
+                  "DurationInSeconds": 0.0,
+                  "Confidence": 0.991479
+                },
+                {
+                  "Word": "weather",
+                  "Offset": 5800000,
+                  "Duration": 3000000,
+                  "OffsetInSeconds": 0.58,
+                  "DurationInSeconds": 0.0,
+                  "Confidence": 0.994226
+                },
+                {
+                  "Word": "like",
+                  "Offset": 8800000,
+                  "Duration": 4800000,
+                  "OffsetInSeconds": 0.88,
+                  "DurationInSeconds": 0.0,
+                  "Confidence": 0.993973
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+

@@ -1,0 +1,72 @@
+endpoint1:
+  concurrency: 20
+  host: localhost
+  port: 5000
+endpoint2:
+  concurrency: 20
+  host: localhost
+  port: 5001
+endpoint3:
+  concurrency: 20
+  host: localhost
+  port: 5002
+endpoint4:
+  concurrency: 20
+  host: localhost
+  port: 5003
+endpoint5:
+  concurrency: 20
+  host: localhost
+  port: 5004
+endpoint6:
+  concurrency: 20
+  host: localhost
+  port: 5005
+endpoint7:
+  concurrency: 20
+  host: localhost
+  port: 5006
+endpoint8:
+  concurrency: 20
+  host: localhost
+  port: 5007
+endpoint9:
+  concurrency: 20
+  host: localhost
+  port: 5008
+endpoint10:
+  concurrency: 20
+  host: localhost
+  port: 5009
+endpoint11:
+  concurrency: 20
+  host: localhost
+  port: 5010
+endpoint12:
+  concurrency: 20
+  host: localhost
+  port: 5011
+endpoint13:
+  concurrency: 20
+  host: localhost
+  port: 5012
+endpoint14:
+  concurrency: 20
+  host: localhost
+  port: 5013
+endpoint15:
+  concurrency: 20
+  host: localhost
+  port: 5014
+endpoint16:
+  concurrency: 20
+  host: localhost
+  port: 5015
+endpoint17:
+  concurrency: 20
+  host: localhost
+  port: 5016
+endpoint18:
+  concurrency: 20
+  host: localhost
+  port: 5017
