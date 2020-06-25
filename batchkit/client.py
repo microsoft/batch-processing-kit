@@ -30,7 +30,7 @@ Settings = namedtuple("Settings", "input_folder input_list output_folder scratch
 logger = logging.getLogger("batch")
 
 """
-Implements an app for running SpeechSDKBatchRequests in a few different modes.
+Implements an app for running *BatchRequests in a few different modes.
 Built directly on top of ApiServer.
 """
 

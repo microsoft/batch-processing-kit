@@ -9,7 +9,7 @@ from multiprocessing import Pipe, Value
 import logging
 from typing import Tuple, Any
 
-from batch_client.utils import tee_to_pipe_decorator, NonDaemonicPool, FailedRecognitionError
+from batchkit.utils import tee_to_pipe_decorator, NonDaemonicPool, FailedRecognitionError
 
 """
 In this test module, there are primarily three things under test:

@@ -4,8 +4,8 @@
 import multiprocessing
 from typing import List, Optional
 
-from batch_client.logger import LogEventQueue
-from batch_client.work_item import WorkItemRequest, WorkItemResult
+from batchkit.logger import LogEventQueue
+from batchkit.work_item import WorkItemRequest, WorkItemResult
 
 
 class SpeechSDKWorkItemRequest(WorkItemRequest):

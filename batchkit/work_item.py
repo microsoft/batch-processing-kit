@@ -10,7 +10,7 @@ from typing import Optional
 import jsonpickle
 import cProfile
 
-from batch_client.logger import LogEventQueue, LogLevel
+from batchkit.logger import LogEventQueue, LogLevel
 
 # Process-wide globals for CancellationToken and LogEventQueue.
 proc_scope_ct: Optional[multiprocessing.Event] = None

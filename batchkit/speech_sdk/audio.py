@@ -4,7 +4,7 @@
 import wave
 import azure.cognitiveservices.speech as speechsdk
 
-from batch_client.logger import LogEventQueue, LogLevel
+from batchkit.logger import LogEventQueue, LogLevel
 
 
 class WavFileReaderCallback(speechsdk.audio.PullAudioInputStreamCallback):

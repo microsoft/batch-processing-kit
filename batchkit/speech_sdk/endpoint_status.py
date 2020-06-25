@@ -5,8 +5,8 @@ import socket
 import requests
 import json
 
-from batch_client.endpoint_status import EndpointStatusChecker
-from batch_client.logger import LogEventQueue
+from batchkit.endpoint_status import EndpointStatusChecker
+from batchkit.logger import LogEventQueue
 
 
 class SpeechSDKEndpointStatusChecker(EndpointStatusChecker):

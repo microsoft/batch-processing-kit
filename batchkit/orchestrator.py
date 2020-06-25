@@ -19,7 +19,7 @@ from .batch_status import BatchStatusProvider, BatchStatusEnum
 from .endpoint_manager import EndpointManager
 from .endpoint_status import EndpointStatusChecker
 from .handlers import notify_file_modified
-from .config import load_configuration
+from .endpoint_config import load_configuration
 from .utils import write_json_file_atomic, write_single_output_json, \
     current_threads_stacktrace, BatchNotFoundException
 from .logger import LogEventQueue

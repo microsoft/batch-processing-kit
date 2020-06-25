@@ -3,10 +3,11 @@
 
 from typing import List
 
-from batch_client.batch_request import BatchRequest
-from batch_client.speech_sdk.work_item import SpeechSDKWorkItemRequest
-from batch_client.utils import BadRequestError
-from batch_client.work_item import WorkItemRequest
+from batchkit.batch_request import BatchRequest
+from batchkit.speech_sdk.batch_config import SpeechSDKBatchConfig
+from batchkit.speech_sdk.work_item import SpeechSDKWorkItemRequest
+from batchkit.utils import BadRequestError
+from batchkit.work_item import WorkItemRequest
 
 
 class SpeechSDKBatchRequest(BatchRequest):
@@ -52,3 +53,7 @@ class SpeechSDKBatchRequest(BatchRequest):
             raise BadRequestError("Request body argument 'files' was not List[str]")
         return SpeechSDKBatchRequest(json['files'], json['language'], json['diarization'],
                                      json['nbest'], json['profanity'], bool(json['combine_results']))
+
+    @staticmethod
+    def from_config(files: List[str], config: SpeechSDKBatchConfig):
+        .TODO

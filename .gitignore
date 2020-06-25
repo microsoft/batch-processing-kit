@@ -4,7 +4,7 @@ build/
 dist/
 
 # PyCache (IDE associated)
-batch_client/__pycache__/
-batch_client/speech_sdk/__pycache__/
+batchkit/__pycache__/
+batchkit/speech_sdk/__pycache__/
 tests/__pycache__/
 

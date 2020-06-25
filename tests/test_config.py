@@ -1,6 +1,6 @@
 from unittest import TestCase, main
 from unittest.mock import patch
-from batch_client.config import normalize_validate_config
+from batchkit.endpoint_config import normalize_validate_config
 from .test_base import MockDevice
 from deepdiff import DeepDiff
 import json

@@ -7,7 +7,7 @@ import sys
 import os
 import cProfile
 
-from tests.test_e2e_stress_mock_sdk import UnstableSDKTestCase
+from tests.test_e2e_stress_mock_speechsdk import UnstableSDKTestCase
 
 do_profile = False
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '..'))

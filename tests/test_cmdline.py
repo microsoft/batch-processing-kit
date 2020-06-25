@@ -1,6 +1,6 @@
 from unittest import TestCase, main
 from unittest.mock import patch
-from batch_client.parser import create_parser, parse_cmdline
+from batchkit.parser import create_parser, parse_cmdline
 from .test_base import MockDevice
 
 

@@ -6,9 +6,9 @@ import time
 from typing import Dict
 import logging
 
-from batch_client.constants import ORCHESTRATOR_SCOPE_MAX_RETRIES
-from batch_client.run_summarizer import BatchRunSummarizer
-from batch_client.speech_sdk.work_item import SpeechSDKWorkItemResult
+from batchkit.constants import ORCHESTRATOR_SCOPE_MAX_RETRIES
+from batchkit.run_summarizer import BatchRunSummarizer
+from batchkit.speech_sdk.work_item import SpeechSDKWorkItemResult
 
 
 logger = logging.getLogger("batch")

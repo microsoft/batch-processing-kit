@@ -6,11 +6,11 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='batch_client',
-    version='1.0.0',
-    author='Azure Speech Services',
+    name='batchkit',
+    version='0.9.0',
+    author='Microsoft Azure',
     author_email='andwald@microsoft.com',
-    url='https://docs.microsoft.com/en-us/azure/cognitive-services/speech-service/speech-container-batch-processing',
+    url='https://github.com/microsoft/batch-processing-kit',
     packages=find_packages(),
     license="MIT",
     scripts=['scripts/run-batch-client'],

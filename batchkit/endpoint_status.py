@@ -4,7 +4,6 @@
 from abc import ABC, abstractmethod
 import logging
 
-from .batch_request import BatchRequest
 from .logger import LogEventQueue
 from .utils import BadRequestError
 
@@ -38,10 +37,10 @@ class EndpointStatusChecker(ABC):
         """
         # TODO: This should be done by external dependency injection instead of fixing types here.
         if req_type.__name__ == "SpeechSDKBatchRequest":
-            from batch_client.speech_sdk.endpoint_status import SpeechSDKEndpointStatusChecker
+            from batchkit.speech_sdk.endpoint_status import SpeechSDKEndpointStatusChecker
             return SpeechSDKEndpointStatusChecker(leq)
         elif req_type.__name__ == "GrpcBatchRequest":
-            from batch_client.unidec_grpc.endpoint_status import GrpcEndpointStatusChecker
+            from batchkit.unidec_grpc.endpoint_status import GrpcEndpointStatusChecker
             return GrpcEndpointStatusChecker(leq)
         elif isinstance(None, req_type):
             return UnknownEndpointStatusChecker(leq)

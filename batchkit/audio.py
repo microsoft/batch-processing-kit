@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 
 import logging
-from collections import namedtuple
 import gi
 import os
 import wave
@@ -15,8 +14,6 @@ logger = logging.getLogger("batch")
 
 native_extensions = [".wav"]
 conversion_extensions = [".mp3", ".flac", ".ogg", ".opus", ".alaw", ".mulaw"]
-
-SpeechConfig = namedtuple("SpeechConfig", "language nbest diarization profanity sentiment allow_resume")
 
 
 class InvalidAudioFormatError(Exception):

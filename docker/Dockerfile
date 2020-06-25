@@ -8,7 +8,7 @@ RUN apt-get update -y && \
         python3 python3-pip python3-dev \
         build-essential libssl1.0.0 libasound2 \
         libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly python3-gst-1.0
-ARG BATCH_PACKAGE=batch_client-1.0
+ARG BATCH_PACKAGE
 COPY dist/${BATCH_PACKAGE}-* requirements.txt /
 RUN ln -s /usr/bin/pip3 /usr/bin/pip && \
     ln -s /usr/bin/python3 /usr/bin/python && \

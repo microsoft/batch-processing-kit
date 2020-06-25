@@ -5,11 +5,10 @@
 
 import sys
 import os
-import multiprocessing
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '..'))
-from batch_client.client import run
-from batch_client.parser import parse_cmdline
+from batchkit.client import run
+from batchkit.parser import parse_cmdline
 
 
 # Main entry point
@@ -17,18 +16,3 @@ if __name__ == '__main__':
     args = parse_cmdline()
     run(args)
     exit(0)
-
-
-# @TODO: Current open issues
-# add logic for perf thread in Orchestrator to dynamically compute RTF and concurrency per endpoint
-#    - hill climbing / backoff timer
-#    - EndpointManager's pool size will be maximum concurrency allowed
-#      (current EndpointManager already adheres to active concurrency limit, not pool size)
-# add statsd metrics for the Orchestrator instead of only relying on debug logging thread
-# Use distroless Python container and non-root user
-# consider switching from pyinotify to watchdog, which is portable between platforms (https://pythonhosted.org/watchdog)
-# add https file support
-# support k8s config maps
-# support server side load balancing including backoffs
-# support GStreamer on Windows: https://stackoverflow.com/questions/17278953/gstreamer-python-bindings-for-windows
-# support ac3, aiff, m4a, mp4, tta, voc and wma

@@ -12,12 +12,12 @@ from multiprocessing import current_process
 from functools import wraps
 from typing import List, Optional
 
-from batch_client.logger import LogEventQueue, LogLevel
-from batch_client.speech_sdk.work_item import SpeechSDKWorkItemRequest, SpeechSDKWorkItemResult
-from batch_client.utils import sha256_checksum, get_input_output_file_names, write_json_file_atomic, \
+from batchkit.logger import LogEventQueue, LogLevel
+from batchkit.speech_sdk.work_item import SpeechSDKWorkItemRequest, SpeechSDKWorkItemResult
+from batchkit.utils import sha256_checksum, get_input_output_file_names, write_json_file_atomic, \
     EndpointDownError, FailedRecognitionError, tee_to_pipe_decorator, CancellationTokenException
-from batch_client.audio import init_gstreamer, convert_audio
-from batch_client.constants import RECOGNIZER_SCOPE_RETRIES
+from batchkit.audio import init_gstreamer, convert_audio
+from batchkit.constants import RECOGNIZER_SCOPE_RETRIES
 from .audio import WavFileReaderCallback
 from .endpoint_status import SpeechSDKEndpointStatusChecker
 

@@ -13,15 +13,15 @@ from functools import partial
 import shutil
 from threading import Thread
 
-import batch_client.audio
-from batch_client import audio
-from batch_client.client import run
-from batch_client.parser import parse_cmdline
-from batch_client.speech_sdk.recognize import FileRecognizer
-from batch_client.speech_sdk.endpoint_status import SpeechSDKEndpointStatusChecker
-import batch_client.orchestrator
-import batch_client.utils as utils
-import batch_client.endpoint_manager
+import batchkit.audio
+from batchkit import audio
+from batchkit.client import run
+from batchkit.parser import parse_cmdline
+from batchkit.speech_sdk.recognize import FileRecognizer
+from batchkit.speech_sdk.endpoint_status import SpeechSDKEndpointStatusChecker
+import batchkit.orchestrator
+import batchkit.utils as utils
+import batchkit.endpoint_manager
 
 
 NUM_AUDIO_FILES = 5000
@@ -58,7 +58,7 @@ sample = os.path.join(
     test_root,
     'audio/whatstheweatherlike.wav'
 )
-audio_duration = batch_client.audio.check_audio_file(sample)
+audio_duration = batchkit.audio.check_audio_file(sample)
 
 # Read some json that we can produce for each segment final result (recognized event).
 sample_segment = os.path.join(
@@ -232,14 +232,14 @@ class UnstableSDKTestCase(object):
 
         os.environ['PROB_IO_OSERROR'] = str(PROB_IO_OSERROR)
 
-        batch_client.speech_sdk.recognize.sha256_checksum = sha256checksum
-        batch_client.speech_sdk.recognize.speechsdk_provider = speechsdk_provider
-        batch_client.speech_sdk.recognize.SpeechSDKEndpointStatusChecker.check_endpoint = check_server
-        batch_client.speech_sdk.endpoint_status.SpeechSDKEndpointStatusChecker.check_endpoint = check_server
+        batchkit.speech_sdk.recognize.sha256_checksum = sha256checksum
+        batchkit.speech_sdk.recognize.speechsdk_provider = speechsdk_provider
+        batchkit.speech_sdk.recognize.SpeechSDKEndpointStatusChecker.check_endpoint = check_server
+        batchkit.speech_sdk.endpoint_status.SpeechSDKEndpointStatusChecker.check_endpoint = check_server
 
         # We only cause transient errors so eventually all files pass.
-        batch_client.speech_sdk.recognize.RECOGNIZER_SCOPE_RETRIES = 2
-        batch_client.orchestrator.ORCHESTRATOR_SCOPE_MAX_RETRIES = 200
+        batchkit.speech_sdk.recognize.RECOGNIZER_SCOPE_RETRIES = 2
+        batchkit.orchestrator.ORCHESTRATOR_SCOPE_MAX_RETRIES = 200
 
         with tempfile.TemporaryDirectory() as tempdir_out:
             with tempfile.TemporaryDirectory() as tempdir_log:
@@ -251,17 +251,17 @@ class UnstableSDKTestCase(object):
                         if not daemon_mode:
                             _contrived_audio_files_oneshot_fn = partial(contrived_audio_files_oneshot, NUM_AUDIO_FILES,
                                                                         tempdir_in)
-                            batch_client.client.get_audio_files = _contrived_audio_files_oneshot_fn
-                            batch_client.audio.check_audio_file = check_audio_file
+                            batchkit.client.get_audio_files = _contrived_audio_files_oneshot_fn
+                            batchkit.audio.check_audio_file = check_audio_file
                         else:
                             _contrived_audio_files_daemon_init = contrived_audio_files_daemon_init(
                                 NUM_AUDIO_FILES, tempdir_in)
                             _contrived_audio_files_daemon_incremental = contrived_audio_files_daemon_incremental(
                                 NUM_AUDIO_FILES, tempdir_in)
-                            batch_client.client.constants.DAEMON_MODE_MAX_FILES = NUM_AUDIO_FILES
+                            batchkit.client.constants.DAEMON_MODE_MAX_FILES = NUM_AUDIO_FILES
                             # Actual implementations.
-                            batch_client.client.get_audio_files = utils.get_audio_files
-                            batch_client.audio.check_audio_file = audio.check_audio_file
+                            batchkit.client.get_audio_files = utils.get_audio_files
+                            batchkit.audio.check_audio_file = audio.check_audio_file
 
                         # Reflect on batch-client src root directory.
                         root = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..')
