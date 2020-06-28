@@ -11,7 +11,8 @@ class SpeechSDKBatchConfig(BatchConfig):
                  diarization: str,
                  profanity: str,
                  sentiment: bool,
-                 allow_resume: bool):
+                 allow_resume: bool,
+                 combine_results: bool):
         super().__init__()
         self.language: str = language
         self.nbest = nbest
@@ -19,3 +20,4 @@ class SpeechSDKBatchConfig(BatchConfig):
         self.profanity = profanity
         self.sentiment = sentiment
         self.allow_resume = allow_resume
+        self.combine_results = combine_results

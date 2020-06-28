@@ -120,7 +120,7 @@ class TestPoolWithTee(unittest.TestCase):
     def test_NonDaemonicPool_with_tee_to_pipe(self):
 
         # Disable because we know it works and interfering due to parallel tests (need to prevent that).
-        return
+        # return
 
         pool_procs = 4
         num_tasks = 100

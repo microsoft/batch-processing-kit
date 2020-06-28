@@ -3,6 +3,7 @@
 
 import inspect
 import pkgutil
+import warnings
 from abc import ABC, abstractmethod
 from importlib import import_module
 from typing import List
@@ -40,16 +41,22 @@ class BatchRequest(ABC):
         :returns: A List[type] of BatchRequest subtypes found.
         """
         subtypes: List[type] = []
-        for modinfo in pkgutil.walk_packages():
-            if not modinfo.ispkg and "batch_request" in modinfo.name:
-                module = import_module(modinfo.name)
-                for elem_name in dir(module):
-                    elem = getattr(module, elem_name)
-                    if inspect.isclass(elem) and issubclass(elem, BatchRequest) and elem != BatchRequest:
-                        subtypes.append(elem)
+        with warnings.catch_warnings(record=False):
+            warnings.simplefilter("ignore")
+            # Also known to be noisy:
+            logging.getLogger("pip").setLevel(logging.WARNING)
+
+            for modinfo in pkgutil.walk_packages():
+                if not modinfo.ispkg and "batch_request" in modinfo.name:
+                    module = import_module(modinfo.name)
+                    for elem_name in dir(module):
+                        elem = getattr(module, elem_name)
+                        if inspect.isclass(elem) and issubclass(elem, BatchRequest) and elem != BatchRequest:
+                            subtypes.append(elem)
         return subtypes
 
     @staticmethod
+    @abstractmethod
     def from_json(json: dict):
         """
         Factory construct an instance of BatchRequest based on ctor params provided in a dict
@@ -104,7 +111,7 @@ class BatchRequest(ABC):
         is used to construct a TBatchRequest.
 
         Each subtype must implement its own implementation of this static method with the same
-        signature (method name, parameter names) or a BadRequestError will be raised.
+        signature (method name, parameter names) or a BadRequestError will be raised. It must not be inherited.
 
         The type of `config` should be TBatchConfig that is used to make a corresponding TBatchRequest.
         Furthermore, `config` param should be type-annotated with the concrete subtype name.
@@ -120,7 +127,7 @@ class BatchRequest(ABC):
             if 'from_config' in dir(candid) and \
                     candid.from_config != BatchRequest.from_config:  # User actually overrides the static method
                 # Inspect the method to ensure it follows expectations.
-                argspec = inspect.getfullargspec(cls.from_config)
+                argspec = inspect.getfullargspec(candid.from_config)
                 if argspec.args == ['files', 'config'] and \
                         argspec.annotations['files'] == List[str] and \
                         argspec.annotations['config'] == type(config):

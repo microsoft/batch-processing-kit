@@ -45,15 +45,32 @@ class SpeechSDKBatchRequest(BatchRequest):
 
     @staticmethod
     def from_json(json: dict):
-        for arg in ['files', 'language', 'diarization', 'nbest', 'profanity', 'combine_results']:
+        # String args.
+        for arg in ['files', 'language', 'diarization', 'nbest',
+                    'profanity', 'allow_resume', 'sentiment',
+                    'combine_results']:
             if arg not in json:
-                raise BadRequestError("Missing '{arg}' argument in request body".format(arg=arg))
+                raise BadRequestError("Missing '{arg}' argument (string) in request body".format(arg=arg))
+        # Boolean args.
+        for arg in ['allow_resume', 'sentiment', 'combine_results']:
+            if str.lower(str(arg)) not in [True, False]:
+                raise BadRequestError("'{arg}' argument needs boolean in request body".format(arg=arg))
         if not isinstance(json['files'], list) or \
                 not all([isinstance(x, str) for x in json['files']]):
             raise BadRequestError("Request body argument 'files' was not List[str]")
         return SpeechSDKBatchRequest(json['files'], json['language'], json['diarization'],
-                                     json['nbest'], json['profanity'], bool(json['combine_results']))
+                                     json['nbest'], json['profanity'], bool(json['allow_resume']),
+                                     bool(json['sentiment']), bool(json['combine_results']))
 
     @staticmethod
     def from_config(files: List[str], config: SpeechSDKBatchConfig):
-        .TODO
+        return SpeechSDKBatchRequest(
+            files,
+            config.language,
+            config.diarization,
+            config.nbest,
+            config.profanity,
+            config.allow_resume,
+            config.sentiment,
+            config.combine_results,
+        )
