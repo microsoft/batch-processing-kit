@@ -11,7 +11,6 @@ from multiprocessing import Lock, RLock, Condition, Event, Queue
 from multiprocessing.process import current_process
 from threading import Thread
 from typing import Dict, Optional, List
-
 from pyinotify import ThreadedNotifier
 
 from .batch_request import BatchRequest
@@ -127,6 +126,9 @@ class Orchestrator:
             time.sleep(RUN_SUMMARY_LOOP_INTERVAL)
 
     def __debug_loop(self):
+        """
+        This is only intended to be used during development and debugging.
+        """
         def _check_lock_acq(lock):
             acquired = lock.acquire(block=False)
             if acquired:
@@ -405,7 +407,7 @@ class Orchestrator:
                             self.notify_work_failure,
                             # Get an EndpointStatusChecker for the type of the
                             # BatchRequest that is currently being processed.
-                            EndpointStatusChecker.get_for_type(self._on_batch_type, self._log_event_que)
+                            self._on_batch_type.get_endpoint_status_checker(self._log_event_que)
                         )
                     )
             # Validation of the config could fail or invalid yaml may have been given, etc.
@@ -460,7 +462,7 @@ class Orchestrator:
             # Ensure that they are all using the correct type of EndpointStatusChecker
             # which depends on the subtype of BatchRequest we are currently processing.
             status_checker: EndpointStatusChecker = \
-                EndpointStatusChecker.get_for_type(self._on_batch_type, self._log_event_que)
+                self._on_batch_type.get_endpoint_status_checker(self._log_event_que)
             for m in self._endpoint_managers:
                 m.set_endpoint_status_checker(status_checker)
 
@@ -497,7 +499,7 @@ class Orchestrator:
                 # Reset record keeping if it's not singleton run summary.
                 if self._singleton_run_summary_path is None:
                     self._work_results = {}
-                self._summarizer = BatchRunSummarizer.create(request)
+                self._summarizer = request.get_batch_run_summarizer()
 
                 logger.info("Orchestrator: Starting batch {0}".format(request.batch_id))
                 self._status_provider.change_status_enum(request.batch_id, BatchStatusEnum.running)

@@ -68,6 +68,7 @@ class FailedRecognitionError(Exception):
     """
     pass
 
+
 class CancellationTokenException(Exception):
     """
     Raised when recognizer is told to stop a recognition request by

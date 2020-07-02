@@ -13,11 +13,11 @@ from functools import wraps
 from typing import List
 
 from batchkit.logger import LogEventQueue, LogLevel
-from examples.speech_sdk.work_item import SpeechSDKWorkItemRequest, SpeechSDKWorkItemResult
 from batchkit.utils import sha256_checksum, get_input_output_file_names, write_json_file_atomic, \
     EndpointDownError, FailedRecognitionError, tee_to_pipe_decorator, CancellationTokenException
 from batchkit.audio import init_gstreamer, convert_audio
 from batchkit.constants import RECOGNIZER_SCOPE_RETRIES
+from .work_item import SpeechSDKWorkItemRequest, SpeechSDKWorkItemResult
 from .audio import WavFileReaderCallback
 from .endpoint_status import SpeechSDKEndpointStatusChecker
 

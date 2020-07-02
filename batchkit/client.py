@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-
+import copy
+import inspect
 import json
 import time
 import traceback
@@ -15,6 +16,8 @@ from typing import Optional, List, Set
 
 from .apiserver import ApiServer
 from . import constants
+from .batch_config import BatchConfig
+from .batch_request import BatchRequest
 from .batch_status import BatchStatusProvider, BatchStatusEnum, BatchStatus
 from .handlers import update_work_on_directory_content_change
 from .logger import setup_logging, LogEventQueue
@@ -94,25 +97,31 @@ def run(cmd_args: Namespace, batch_type: type):
         store_combined_json=cmd_args.store_combined_json,
     )
 
-    speech_config = SpeechConfig(language=cmd_args.language,
-                                 nbest=cmd_args.nbest,
-                                 diarization=cmd_args.diarization_mode,
-                                 profanity=cmd_args.profanity_mode,
-                                 sentiment=cmd_args.enable_sentiment,
-                                 allow_resume=cmd_args.allow_resume)
+    # Determine the type of BatchConfig we need to make from the args.
+    config_type: type
+    # If concrete BatchConfig subtype was provided.
+    if issubclass(batch_type, BatchConfig):
+        config_type = batch_type
+    # If concrete BatchRequest subtype was provided.
+    else:
+        assert issubclass(batch_type, BatchRequest)
+        config_type = inspect.getfullargspec(getattr(batch_type, "from_config")).annotations['config']
 
+    # Now make the BatchConfig from the args.
+    batch_config: config_type = getattr(config_type, "from_args")(cmd_args)
+
+    # Make sure prereqs exist.
     if run_mode != "APISERVER":
         create_dir(cmd_args.output_folder)
     create_dir(cmd_args.scratch_folder)
-
     assert_file_exists(settings.config_file)
     if settings.input_list:
         assert_file_exists(settings.input_list)
 
-    client = Client.create(run_mode, settings, speech_config, log_queue)
+    client = Client.create(run_mode, settings, batch_config, log_queue)
 
     logger.info("client.py: run(): Running:  {0}  with settings: {1},  and speech config: {2}".format(
-        type(client).__name__, settings, speech_config)
+        type(client).__name__, settings, batch_config)
     )
     ret = False
     try:
@@ -135,7 +144,7 @@ def run(cmd_args: Namespace, batch_type: type):
 class Client(ABC):
 
     @staticmethod
-    def create(client_type, settings: Settings, speech_config: SpeechConfig, log_queue: LogEventQueue):
+    def create(client_type, settings: Settings, batch_config: BatchConfig, log_queue: LogEventQueue):
         """
         Factory method for creation of a Client.
 
@@ -144,21 +153,21 @@ class Client(ABC):
         disorderly shutdown.
         """
         if client_type == "ONESHOT":
-            return OneShotClient(settings, speech_config, log_queue)
+            return OneShotClient(settings, batch_config, log_queue)
         elif client_type == "DAEMON":
-            return DaemonClient(settings, speech_config, log_queue)
+            return DaemonClient(settings, batch_config, log_queue)
         elif client_type == "APISERVER":
-            return GenericClient(settings, speech_config, log_queue)
+            return GenericClient(settings, batch_config, log_queue)
         else:
             msg = "Client type {0} unrecognized.".format(client_type)
             logger.error(msg)
             raise InvalidConfigurationError(msg)
 
-    def __init__(self, settings: Settings, speech_config: SpeechConfig, log_queue: LogEventQueue):
+    def __init__(self, settings: Settings, batch_config: BatchConfig, log_queue: LogEventQueue):
         super().__init__()
         self._register_signal_handlers()
         self.settings = settings
-        self.speech_config = speech_config
+        self.batch_config = batch_config
         self.log_queue = log_queue
 
         # Top-level composition of all components.
@@ -177,7 +186,7 @@ class Client(ABC):
             self.submission_queue,
             self.status_provider,
             self.settings.config_file,
-            self.settings.strict_config,
+            self.settings.strict_configuration_validation,
             self.settings.log_folder,
 
             # Take any old run batch dirs found in scratch and the
@@ -264,18 +273,10 @@ class Client(ABC):
         results from batch's scratch dir to a particular output dir.
         Synchronously block the thread until these are completed.
         """
-        batch_req = SpeechSDKBatchRequest(
-            list(files),
-            self.speech_config.language,
-            self.speech_config.diarization,
-            self.speech_config.nbest,
-            self.speech_config.profanity,
-            self.speech_config.allow_resume,
-            self.speech_config.sentiment,
-            False,
-        )
+        batch_req = BatchRequest.from_config(files, self.batch_config)
 
-        logger.info("{0}:  Submitting batch with {1} files.".format(type(self).__name__, len(files)))
+        logger.info("{0}:  Submitting {1} with {2} files.".format(
+            type(self).__name__, type(batch_req).__name__, len(files)))
         status: BatchStatus = self.apiserver.submit(batch_req)
 
         while status.status != BatchStatusEnum.done:
@@ -334,8 +335,8 @@ class GenericClient(Client):
     use case on top of the ApiServer as an object for their custom batch application, and
     also as a process host for the ApiServer's HTTP endpoints. Hybrid consumption works too.
     """
-    def __init__(self, settings: Settings, speech_config: SpeechConfig, log_queue: LogEventQueue):
-        super().__init__(settings, speech_config, log_queue)
+    def __init__(self, settings: Settings, batch_config: BatchConfig, log_queue: LogEventQueue):
+        super().__init__(settings, batch_config, log_queue)
         self._stop_evt = multiprocessing.Event()
 
     def _handle_signal(self, signum, frame):
@@ -371,8 +372,13 @@ class GenericClient(Client):
 
 
 class DaemonClient(Client):
-    def __init__(self, settings: Settings, speech_config: SpeechConfig, log_queue: LogEventQueue):
-        super().__init__(settings, speech_config, log_queue)
+    def __init__(self, settings: Settings, batch_config: BatchConfig, log_queue: LogEventQueue):
+        # Behavior overrides particular to DaemonClient.
+        # Combined json result output will be a function of the client Settings, not to be done in the batch itself.
+        batch_config = copy.deepcopy(batch_config)
+        batch_config.combine_results = False
+
+        super().__init__(settings, batch_config, log_queue)
         self._next_batch_files_que = multiprocessing.Queue()
         self._work_notifier = None
         self._is_success = True
@@ -468,8 +474,12 @@ class DaemonClient(Client):
 
 
 class OneShotClient(Client):
-    def __init__(self, settings: Settings, speech_config: SpeechConfig, log_queue: LogEventQueue):
-        super().__init__(settings, speech_config, log_queue)
+    def __init__(self, settings: Settings, batch_config: BatchConfig, log_queue: LogEventQueue):
+        # Behavior overrides particular to DaemonClient.
+        # Combined json result output will be a function of the client Settings, not to be done in the batch itself.
+        batch_config = copy.deepcopy(batch_config)
+        batch_config.combine_results = False
+        super().__init__(settings, batch_config, log_queue)
 
     def requires_flask_functional(self):
         return False

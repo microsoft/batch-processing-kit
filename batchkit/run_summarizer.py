@@ -4,7 +4,6 @@
 from abc import ABC, abstractmethod
 from typing import Dict
 
-from .batch_request import BatchRequest
 from .work_item import WorkItemResult
 
 

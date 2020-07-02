@@ -13,7 +13,7 @@ import jsonpickle
 import logging
 
 from .batch_config import BatchConfig
-from .endpoint_status import EndpointStatusChecker
+from .endpoint_status import EndpointStatusChecker, UnknownEndpointStatusChecker
 from .logger import LogEventQueue
 from .run_summarizer import BatchRunSummarizer
 from .utils import BadRequestError
@@ -158,13 +158,14 @@ class BatchRequest(ABC):
         """
         pass
 
-    @abstractmethod
+    @staticmethod
     def get_endpoint_status_checker(self, leq: LogEventQueue) -> EndpointStatusChecker:
         """
         Get an EndpointStatusChecker for the kind of endpoints that are capable of
-        processing this type of BatchRequest.
+        processing this type of BatchRequest. This should be overridden by the BatchRequest subtype,
+        but otherwise a default UnknownEndpointStatusChecker is returned.
         """
-        pass
+        return UnknownEndpointStatusChecker(leq)
 
     @abstractmethod
     def get_batch_run_summarizer(self) -> BatchRunSummarizer:

@@ -1,10 +1,12 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+from argparse import Namespace
 
 from batchkit.batch_config import BatchConfig
 
 
 class SpeechSDKBatchConfig(BatchConfig):
+
     def __init__(self,
                  language: str,
                  nbest: int,
@@ -21,3 +23,15 @@ class SpeechSDKBatchConfig(BatchConfig):
         self.sentiment = sentiment
         self.allow_resume = allow_resume
         self.combine_results = combine_results
+
+    @staticmethod
+    def from_args(args: Namespace):
+        return SpeechSDKBatchConfig(
+            language=args.language,
+            nbest=args.nbest,
+            diarization=args.diarization_mode,
+            profanity=args.profanity_mode,
+            sentiment=args.enable_sentiment,
+            allow_resume=args.allow_resume,
+            combine_results=args.store_combined_json,
+        )
