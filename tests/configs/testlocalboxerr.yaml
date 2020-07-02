@@ -1,0 +1,8 @@
+endpoint1:
+  concurrency: 10
+  host: mradmilaub3
+  port: 5000
+endpoint2:
+  concurrency: 10
+  host: bogushost123
+  port: 5000
