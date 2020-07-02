@@ -9,23 +9,25 @@ import signal
 import os
 import multiprocessing
 import logging
+from argparse import Namespace
 from collections import namedtuple
 from typing import Optional, List, Set
 
 from .apiserver import ApiServer
-from .audio import SpeechConfig
 from . import constants
-from .speech_sdk.batch_request import SpeechSDKBatchRequest
 from .batch_status import BatchStatusProvider, BatchStatusEnum, BatchStatus
-from .handlers import update_work_on_audio_change
+from .handlers import update_work_on_directory_content_change
 from .logger import setup_logging, LogEventQueue
 from .orchestrator import Orchestrator
 from .utils import get_audio_files, flush_queue_into_set, InvalidConfigurationError, \
     create_dir, assert_file_exists, move_files, assert_sufficient_openfd_rlimit, \
     kill_children_procs, write_single_output_json
 
-Settings = namedtuple("Settings", "input_folder input_list output_folder scratch_folder log_folder "
-                                  "config_file strict_config store_combined_json apiserver_port")
+Settings = namedtuple("Settings",
+                      "input_folder input_list output_folder "           # ONESHOT or DAEMON modes only.
+                      "apiserver_port "                                  # APISERVER mode only.
+                      "scratch_folder log_folder store_combined_json "
+                      "config_file strict_configuration_validation ")
 
 logger = logging.getLogger("batch")
 
@@ -35,10 +37,26 @@ Built directly on top of ApiServer.
 """
 
 
-def run(cmd_args):
+def run(cmd_args: Namespace, batch_type: type):
     """
-    Main entry point for the client app in any mode.
-    :param cmd_args: command line arguments
+    Main entry point for the client app to run in ONESHOT, DAEMON, or APISERVER modes.
+
+    :param cmd_args: command line arguments which must be composed of at least the
+                     fields in `Settings` namedtuple (depending on mode) as well as:
+                     `console_log_level`, `file_log_level`: any of batchkit.logger.LogLevel enum values
+                     `run_mode`: 'ONESHOT', 'DAEMON', or 'APISERVER'
+                     Other args as necessary to construct the concrete subtype of BatchConfig.
+
+    :param batch_type: a subtype of BatchConfig or BatchRequest for your workload.
+                       This is the single mechanism of dependency injection into the framework.
+                       The framework will infer the rest of the type injections as long as these requirements are met:
+                         - `batch_type` must be in the type hierarchy originating from
+                              abstract BatchRequest or BatchConfig.
+                         - Your BatchRequest subtype must be in a module named batch_request.py
+                         - Your BatchRequest subtype must override all abstract methods of BatchRequest
+                         - Your modules must be discoverable from the sys.path (e.g. in an installed package,
+                           in the PYTHONPATH, appending to sys.path, etc).
+
     :return: whether this run succeeded
 
     Notes:
@@ -57,7 +75,7 @@ def run(cmd_args):
     log_queue, log_listener = setup_logging(
         cmd_args.log_folder, cmd_args.console_log_level, cmd_args.file_log_level)
 
-    client_type = cmd_args.run_mode
+    run_mode = cmd_args.run_mode
 
     settings = Settings(
         # Args only relevant in case of ONESHOT or DAEMON modes.
@@ -66,13 +84,13 @@ def run(cmd_args):
         output_folder=cmd_args.output_folder,
 
         # Args only relevant in case of APISERVER mode.
-        apiserver_port=cmd_args.port,
+        apiserver_port=cmd_args.apiserver_port,
 
         # Following args are relevant in all modes.
         scratch_folder=cmd_args.scratch_folder,
         log_folder=cmd_args.log_folder,
         config_file=cmd_args.configuration_file,
-        strict_config=cmd_args.strict_configuration_validation,
+        strict_configuration_validation=cmd_args.strict_configuration_validation,
         store_combined_json=cmd_args.store_combined_json,
     )
 
@@ -83,7 +101,7 @@ def run(cmd_args):
                                  sentiment=cmd_args.enable_sentiment,
                                  allow_resume=cmd_args.allow_resume)
 
-    if client_type != "APISERVER":
+    if run_mode != "APISERVER":
         create_dir(cmd_args.output_folder)
     create_dir(cmd_args.scratch_folder)
 
@@ -91,7 +109,7 @@ def run(cmd_args):
     if settings.input_list:
         assert_file_exists(settings.input_list)
 
-    client = Client.create(client_type, settings, speech_config, log_queue)
+    client = Client.create(run_mode, settings, speech_config, log_queue)
 
     logger.info("client.py: run(): Running:  {0}  with settings: {1},  and speech config: {2}".format(
         type(client).__name__, settings, speech_config)
@@ -375,7 +393,7 @@ class DaemonClient(Client):
         """
         # Race condition between reading initial files and hooking for deltas
         # solved by hooking for deltas then reading initial files and de-duping.
-        self._work_notifier = update_work_on_audio_change(
+        self._work_notifier = update_work_on_directory_content_change(
             self.settings.input_folder, self._next_batch_files_que, self.log_queue)
         submitted = set()  # all files ever submitted at any time since process started
 

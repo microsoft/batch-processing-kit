@@ -2,6 +2,7 @@
 # Licensed under the MIT License.
 
 import argparse
+from argparse import Namespace
 import os
 
 
@@ -108,20 +109,20 @@ def create_parser():
         help="whether to allow resuming from a failed transcription (WARNING: results may differ)"
     )
     parser.add_argument(
-        '-port', '--port', default=5000, type=check_positive,
+        '-port', '--apiserver_port', default=5000, type=check_positive,
         help="Port for listening when using APISERVER mode"
     )
     return parser
 
 
-def parse_cmdline(args=None):
+def parse_cmdline(args=None) -> Namespace:
     """
     Create a command line parser for the batch client, and parse arguments
     :param args: arguments to parse
     :return: parsed command line arguments
     """
     parser = create_parser()
-    args = parser.parse_args(args=args)
+    args: Namespace = parser.parse_args(args=args)
 
     if args.input_list is not None and args.run_mode != 'ONESHOT':
         parser.error("argument -input_list/--input-list: not allowed if the run mode is not ONESHOT")

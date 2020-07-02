@@ -4,8 +4,11 @@
 from typing import List
 
 from batchkit.batch_request import BatchRequest
-from batchkit.speech_sdk.batch_config import SpeechSDKBatchConfig
-from batchkit.speech_sdk.work_item import SpeechSDKWorkItemRequest
+from batchkit.logger import LogEventQueue
+from examples import SpeechSDKBatchConfig
+from examples.speech_sdk.endpoint_status import SpeechSDKEndpointStatusChecker
+from examples import SpeechSDKBatchRunSummarizer
+from examples import SpeechSDKWorkItemRequest
 from batchkit.utils import BadRequestError
 from batchkit.work_item import WorkItemRequest
 
@@ -74,3 +77,9 @@ class SpeechSDKBatchRequest(BatchRequest):
             config.sentiment,
             config.combine_results,
         )
+
+    def get_endpoint_status_checker(self, leq: LogEventQueue) -> SpeechSDKEndpointStatusChecker:
+        return SpeechSDKEndpointStatusChecker(leq)
+
+    def get_batch_run_summarizer(self) -> SpeechSDKBatchRunSummarizer:
+        return SpeechSDKBatchRunSummarizer()

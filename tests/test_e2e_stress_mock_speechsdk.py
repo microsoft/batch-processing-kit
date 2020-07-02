@@ -5,7 +5,6 @@ import sys
 import os
 import json
 from multiprocessing import Event
-
 import yaml
 import tempfile
 from random import random
@@ -16,12 +15,11 @@ from threading import Thread
 import batchkit.audio
 from batchkit import audio
 from batchkit.client import run
-from batchkit.parser import parse_cmdline
-from batchkit.speech_sdk.recognize import FileRecognizer
-from batchkit.speech_sdk.endpoint_status import SpeechSDKEndpointStatusChecker
 import batchkit.orchestrator
 import batchkit.utils as utils
 import batchkit.endpoint_manager
+import examples
+from examples.speech_sdk.parser import parse_cmdline
 
 
 NUM_AUDIO_FILES = 5000
@@ -56,14 +54,14 @@ NEW_AUDIO_FILE_PERIOD = 0.01
 test_root = os.path.dirname(os.path.realpath(__file__))
 sample = os.path.join(
     test_root,
-    'audio/whatstheweatherlike.wav'
+    'resources/whatstheweatherlike.wav'
 )
 audio_duration = batchkit.audio.check_audio_file(sample)
 
 # Read some json that we can produce for each segment final result (recognized event).
 sample_segment = os.path.join(
     test_root,
-    'cloud_batch/whatstheweatherlike.json'
+    'resources/whatstheweatherlike.json'
 )
 with open(sample_segment, 'r') as f:
      sample_segment_json = json.dumps(
@@ -232,13 +230,13 @@ class UnstableSDKTestCase(object):
 
         os.environ['PROB_IO_OSERROR'] = str(PROB_IO_OSERROR)
 
-        batchkit.speech_sdk.recognize.sha256_checksum = sha256checksum
-        batchkit.speech_sdk.recognize.speechsdk_provider = speechsdk_provider
-        batchkit.speech_sdk.recognize.SpeechSDKEndpointStatusChecker.check_endpoint = check_server
-        batchkit.speech_sdk.endpoint_status.SpeechSDKEndpointStatusChecker.check_endpoint = check_server
+        examples.speech_sdk.recognize.sha256_checksum = sha256checksum
+        examples.speech_sdk.recognize.speechsdk_provider = speechsdk_provider
+        examples.speech_sdk.recognize.SpeechSDKEndpointStatusChecker.check_endpoint = check_server
+        examples.speech_sdk.endpoint_status.SpeechSDKEndpointStatusChecker.check_endpoint = check_server
 
         # We only cause transient errors so eventually all files pass.
-        batchkit.speech_sdk.recognize.RECOGNIZER_SCOPE_RETRIES = 2
+        examples.speech_sdk.recognize.RECOGNIZER_SCOPE_RETRIES = 2
         batchkit.orchestrator.ORCHESTRATOR_SCOPE_MAX_RETRIES = 200
 
         with tempfile.TemporaryDirectory() as tempdir_out:
@@ -285,7 +283,7 @@ class UnstableSDKTestCase(object):
                         ).start()
 
                         if daemon_mode:
-                            audio_file = os.path.join(root, "tests/audio/whatstheweatherlike.wav")
+                            audio_file = os.path.join(root, "tests/resources/whatstheweatherlike.wav")
                             for f in _contrived_audio_files_daemon_init:
                                 shutil.copyfile(audio_file, f)
 
@@ -304,7 +302,7 @@ class UnstableSDKTestCase(object):
                         ]
 
                         if daemon_mode:
-                            audio_file = os.path.join(root, "tests/audio/whatstheweatherlike.wav")
+                            audio_file = os.path.join(root, "tests/resources/whatstheweatherlike.wav")
                             def drop_file_emulation():
                                 for f in _contrived_audio_files_daemon_incremental:
                                     shutil.copyfile(audio_file, f)

@@ -33,18 +33,19 @@ class ModifyHandler(pyinotify.ProcessEvent):
         self._callback()
 
 
-class AudioWatchHandler(pyinotify.ProcessEvent):
+class DirectoryWatchHandler(pyinotify.ProcessEvent):
     """
-    Handler for inotify event for modified/added audio files
+    Handler for inotify event for modified/added files in a work directory, such as files
+    corresponding to work items (audio file, image file, text file, etc..).
     """
-    def my_init(self, audio_queue, leq: LogEventQueue):
+    def my_init(self, queue, leq: LogEventQueue):
         """
         Keep a handle on the process pool at init time so we can terminate it later if needed
-        :param audio_queue: queue onto which new audio files will be placed
+        :param queue: queue onto which new audio files will be placed
         :param leq: instance of LogEventQueue to be used for logging
         :return: None
         """
-        self._audio_queue = audio_queue
+        self._queue = queue
         self._leq = leq
 
     def process_IN_CLOSE_WRITE(self, event):
@@ -55,8 +56,8 @@ class AudioWatchHandler(pyinotify.ProcessEvent):
         """
         audio_file = event.pathname
         if is_valid_audio_file(audio_file):
-            self._leq.info("Audio file {0} changed/added, adding it to processing list!".format(audio_file))
-            self._audio_queue.put(audio_file)
+            self._leq.info("File {0} changed/added, adding it to processing list!".format(audio_file))
+            self._queue.put(audio_file)
         else:
             self._leq.warning("{0} is not a file or does not have a supported extension".format(audio_file))
 
@@ -80,19 +81,23 @@ def notify_file_modified(filename, callback, leq):
 
     full_filename = os.path.abspath(filename)
     assert os.path.isfile(full_filename)
-    logger.info("Starting a watch on config file {0}".format(full_filename))
+
+    logger.info("Starting a watch on file: {0}".format(full_filename))
     wm.add_watch(full_filename, pyinotify.IN_CLOSE_WRITE)
 
     return notifier
 
 
-def update_work_on_audio_change(directory, audio_queue, leq):
+def update_work_on_directory_content_change(directory, queue, leq):
     """
     Creates a "modify" directory watch on an input folder, which dynamically adds work
     :param directory: directory to add a watch for
-    :param audio_queue: list for audio files dynamically added (out parameter)
+    :param queue: list for audio files dynamically added (out parameter)
+    :type queue: multiprocessing.Queue
     :param leq: instance of LogEventQueue to be used for logging
+    :type leq: LogEventQueue
     :return: notifier object
+    :rtype: pyinotify.ThreadedNotifier
     """
     # NOTE: this only works is /proc/sys/fs/inotify/max_user_watches is sufficiently large. If not
     # you may need to modify this setting on the host, since it cannot be modified inside Docker.
@@ -101,16 +106,16 @@ def update_work_on_audio_change(directory, audio_queue, leq):
     wm = pyinotify.WatchManager()
     notifier = pyinotify.ThreadedNotifier(
         wm,
-        AudioWatchHandler(audio_queue=audio_queue, leq=leq)
+        DirectoryWatchHandler(queue=queue, leq=leq)
     )
     notifier.daemon = True
-    notifier.name = "AudioChangeNotifierThread"
+    notifier.name = "DirectoryContentChangeNotifierThread"
     notifier.start()
 
     full_directory = os.path.abspath(directory)
     assert os.path.isdir(full_directory)
 
-    logger.info("Starting a watch on config file {0}".format(full_directory))
+    logger.info("Starting a watch on directory: {0}".format(full_directory))
     wm.add_watch(full_directory, pyinotify.IN_CLOSE_WRITE)
 
     return notifier

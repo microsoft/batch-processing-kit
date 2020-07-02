@@ -8,7 +8,7 @@ import logging
 
 from batchkit.constants import ORCHESTRATOR_SCOPE_MAX_RETRIES
 from batchkit.run_summarizer import BatchRunSummarizer
-from batchkit.speech_sdk.work_item import SpeechSDKWorkItemResult
+from examples import SpeechSDKWorkItemResult
 
 
 logger = logging.getLogger("batch")

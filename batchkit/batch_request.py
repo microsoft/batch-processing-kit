@@ -13,6 +13,9 @@ import jsonpickle
 import logging
 
 from .batch_config import BatchConfig
+from .endpoint_status import EndpointStatusChecker
+from .logger import LogEventQueue
+from .run_summarizer import BatchRunSummarizer
 from .utils import BadRequestError
 from .work_item import WorkItemRequest
 
@@ -148,4 +151,21 @@ class BatchRequest(ABC):
     def make_work_items(self, output_dir: str,
                         cache_search_dirs: List[str],
                         log_dir: str) -> List[WorkItemRequest]:
+        """
+        Make WorkItemRequests based on the BatchRequest.
+        This is dependent on the concrete implementation of BatchRequest subtypes, and each subtype
+        should have one or more subtypes of WorkItemRequest it can factory.
+        """
+        pass
+
+    @abstractmethod
+    def get_endpoint_status_checker(self, leq: LogEventQueue) -> EndpointStatusChecker:
+        """
+        Get an EndpointStatusChecker for the kind of endpoints that are capable of
+        processing this type of BatchRequest.
+        """
+        pass
+
+    @abstractmethod
+    def get_batch_run_summarizer(self) -> BatchRunSummarizer:
         pass

@@ -220,15 +220,17 @@ def get_audio_files(input_folder: str, input_list: Optional[str] = None) -> Set[
     """
     Discover all audio files in the input folder matching the given input list
     :param input_folder: folder where audio files reside
-    :param input_list: list of files to be considered
+    :param input_list: filepath to a list of files in the `input_folder` to be considered.
+                       If None, then all files in `input_folder` are considered.
     :return: set of audio files. If the input directory or the non-None input_list
              are non-existent paths, then this returns None. Full paths are returned.
     """
-    # Do some validation if audio files are passed on the command line
+    # Do some validation if audio files are to be limited by `input_list`.
     audio_files = set()
     if os.path.isdir(input_folder):
         audio_files = {
-            f for f in filter_audio_files(os.listdir(input_folder), input_folder)
+            f for f in
+            (os.listdir(input_folder), input_folder)
         }
     else:
         logger.error("Input directory {0} does not exist!".format(input_folder))

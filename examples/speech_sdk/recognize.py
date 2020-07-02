@@ -10,10 +10,10 @@ from threading import Event
 import multiprocessing
 from multiprocessing import current_process
 from functools import wraps
-from typing import List, Optional
+from typing import List
 
 from batchkit.logger import LogEventQueue, LogLevel
-from batchkit.speech_sdk.work_item import SpeechSDKWorkItemRequest, SpeechSDKWorkItemResult
+from examples.speech_sdk.work_item import SpeechSDKWorkItemRequest, SpeechSDKWorkItemResult
 from batchkit.utils import sha256_checksum, get_input_output_file_names, write_json_file_atomic, \
     EndpointDownError, FailedRecognitionError, tee_to_pipe_decorator, CancellationTokenException
 from batchkit.audio import init_gstreamer, convert_audio

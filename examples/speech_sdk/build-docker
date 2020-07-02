@@ -7,4 +7,4 @@ rm -rf ./dist ./build *.egg-info/
 ./setup.py sdist bdist_wheel
 BATCH_PACKAGE=$(./setup.py --fullname | tr -d "\n")
 
-docker build "$@" -f docker/Dockerfile . --build-arg BATCH_PACKAGE=${BATCH_PACKAGE} -t batch-processing-kit:test
+docker build "$@" -f Dockerfile . --build-arg BATCH_PACKAGE=${BATCH_PACKAGE} -t batch-processing-kit:test
