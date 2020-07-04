@@ -14,9 +14,9 @@ with open(os.path.join(rootdir, 'requirements.txt')) as reqs:
 deps = [line for line in required if len(line) > 0 and line[0] != "#"]
 
 
-# Package specification in case it is being run this way.
+# Package specification that includes every example.
 setup(
-    name='batchkit_examples',
+    name='batchkit_examples_speechsdk',
     version='0.9.0',
     author='Microsoft Azure',
     author_email='andwald@microsoft.com',

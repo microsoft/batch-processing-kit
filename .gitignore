@@ -1,6 +1,7 @@
 # Build Artifacts.
 batchkit.egg-info/
 batchkit_examples.egg-info/
+batchkit_examples_speechsdk.egg-info/
 build/
 dist/
 
