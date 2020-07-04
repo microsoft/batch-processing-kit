@@ -18,12 +18,12 @@ from batchkit.client import run
 import batchkit.orchestrator
 import batchkit.utils as utils
 import batchkit.endpoint_manager
-import examples.speech_sdk.recognize
-import examples.speech_sdk.run_summarizer
-import examples.speech_sdk.endpoint_status
-import examples.speech_sdk.audio
-from examples.speech_sdk.batch_config import SpeechSDKBatchConfig
-from examples.speech_sdk.parser import parse_cmdline
+import batchkit_examples.speech_sdk.recognize
+import batchkit_examples.speech_sdk.run_summarizer
+import batchkit_examples.speech_sdk.endpoint_status
+import batchkit_examples.speech_sdk.audio
+from batchkit_examples.speech_sdk.batch_config import SpeechSDKBatchConfig
+from batchkit_examples.speech_sdk.parser import parse_cmdline
 
 
 NUM_AUDIO_FILES = 5000
@@ -234,13 +234,13 @@ class UnstableSDKTestCase(object):
 
         os.environ['PROB_IO_OSERROR'] = str(PROB_IO_OSERROR)
 
-        examples.speech_sdk.recognize.sha256_checksum = sha256checksum
-        examples.speech_sdk.recognize.speechsdk_provider = speechsdk_provider
-        examples.speech_sdk.recognize.SpeechSDKEndpointStatusChecker.check_endpoint = check_server
-        examples.speech_sdk.endpoint_status.SpeechSDKEndpointStatusChecker.check_endpoint = check_server
+        batchkit_examples.speech_sdk.recognize.sha256_checksum = sha256checksum
+        batchkit_examples.speech_sdk.recognize.speechsdk_provider = speechsdk_provider
+        batchkit_examples.speech_sdk.recognize.SpeechSDKEndpointStatusChecker.check_endpoint = check_server
+        batchkit_examples.speech_sdk.endpoint_status.SpeechSDKEndpointStatusChecker.check_endpoint = check_server
 
         # We only cause transient errors so eventually all files pass.
-        examples.speech_sdk.recognize.RECOGNIZER_SCOPE_RETRIES = 2
+        batchkit_examples.speech_sdk.recognize.RECOGNIZER_SCOPE_RETRIES = 2
         batchkit.orchestrator.ORCHESTRATOR_SCOPE_MAX_RETRIES = 200
 
         with tempfile.TemporaryDirectory() as tempdir_out:

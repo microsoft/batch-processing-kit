@@ -6,11 +6,11 @@
 import sys
 import os
 
-from examples.speech_sdk.batch_config import SpeechSDKBatchConfig
+from batchkit_examples.speech_sdk.batch_config import SpeechSDKBatchConfig
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '..'))
 from batchkit import client
-from examples.speech_sdk.parser import parse_cmdline
+from batchkit_examples.speech_sdk.parser import parse_cmdline
 
 
 # Main entry point

@@ -1,6 +1,6 @@
 from unittest import TestCase, main
 from unittest.mock import patch
-from examples.speech_sdk.parser import create_parser, parse_cmdline
+from batchkit_examples.speech_sdk.parser import create_parser, parse_cmdline
 from .test_base import MockDevice
 
 
