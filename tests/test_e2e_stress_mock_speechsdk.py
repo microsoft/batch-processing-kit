@@ -18,7 +18,11 @@ from batchkit.client import run
 import batchkit.orchestrator
 import batchkit.utils as utils
 import batchkit.endpoint_manager
-import examples
+import examples.speech_sdk.recognize
+import examples.speech_sdk.run_summarizer
+import examples.speech_sdk.endpoint_status
+import examples.speech_sdk.audio
+from examples.speech_sdk.batch_config import SpeechSDKBatchConfig
 from examples.speech_sdk.parser import parse_cmdline
 
 
@@ -64,9 +68,9 @@ sample_segment = os.path.join(
     'resources/whatstheweatherlike.json'
 )
 with open(sample_segment, 'r') as f:
-     sample_segment_json = json.dumps(
-         json.load(f)['AudioFileResults'][0]['SegmentResults'][0]
-     )
+    sample_segment_json = json.dumps(
+        json.load(f)['AudioFileResults'][0]['SegmentResults'][0]
+    )
 
 # For getting a segv.
 test_root = os.path.dirname(os.path.realpath(__file__))
@@ -156,7 +160,6 @@ def speechsdk_provider():
             )
             return evt
 
-
         @staticmethod
         def SessionErrorEvent():
             evt = Event()
@@ -197,6 +200,7 @@ def speechsdk_provider():
 
     speechsdk.SpeechRecognizer = SpeechRecognizer
     return speechsdk
+
 
 # We'll get digest from the name since we're picking them.
 def sha256checksum(audiofile):
@@ -249,16 +253,20 @@ class UnstableSDKTestCase(object):
                         if not daemon_mode:
                             _contrived_audio_files_oneshot_fn = partial(contrived_audio_files_oneshot, NUM_AUDIO_FILES,
                                                                         tempdir_in)
-                            batchkit.client.get_audio_files = _contrived_audio_files_oneshot_fn
+                            batchkit.client.get_input_files = _contrived_audio_files_oneshot_fn
                             batchkit.audio.check_audio_file = check_audio_file
                         else:
                             _contrived_audio_files_daemon_init = contrived_audio_files_daemon_init(
                                 NUM_AUDIO_FILES, tempdir_in)
                             _contrived_audio_files_daemon_incremental = contrived_audio_files_daemon_incremental(
                                 NUM_AUDIO_FILES, tempdir_in)
+
+                            # Set a maximum number of files that can ever be submitted by DaemonClient
+                            # over all batches collectively, otherwise DaemonClient would never return from run().
                             batchkit.client.constants.DAEMON_MODE_MAX_FILES = NUM_AUDIO_FILES
+
                             # Actual implementations.
-                            batchkit.client.get_audio_files = utils.get_audio_files
+                            batchkit.client.get_input_files = utils.get_input_files
                             batchkit.audio.check_audio_file = audio.check_audio_file
 
                         # Reflect on batch-client src root directory.
@@ -284,8 +292,8 @@ class UnstableSDKTestCase(object):
 
                         if daemon_mode:
                             audio_file = os.path.join(root, "tests/resources/whatstheweatherlike.wav")
-                            for f in _contrived_audio_files_daemon_init:
-                                shutil.copyfile(audio_file, f)
+                            for a in _contrived_audio_files_daemon_init:
+                                shutil.copyfile(audio_file, a)
 
                         args = [
                             '-config', live_config_path,
@@ -304,8 +312,8 @@ class UnstableSDKTestCase(object):
                         if daemon_mode:
                             audio_file = os.path.join(root, "tests/resources/whatstheweatherlike.wav")
                             def drop_file_emulation():
-                                for f in _contrived_audio_files_daemon_incremental:
-                                    shutil.copyfile(audio_file, f)
+                                for contrived in _contrived_audio_files_daemon_incremental:
+                                    shutil.copyfile(audio_file, contrived)
                                     time.sleep(NEW_AUDIO_FILE_PERIOD)
                             file_drop_thread = Thread(
                                 target=drop_file_emulation,
@@ -314,7 +322,7 @@ class UnstableSDKTestCase(object):
                             )
                             file_drop_thread.start()
 
-                        run(parse_cmdline(args))
+                        run(parse_cmdline(args), SpeechSDKBatchConfig)
                         cancellation.set()
 
                         if daemon_mode:
@@ -327,8 +335,8 @@ class UnstableSDKTestCase(object):
                         # Check all the results are there according to run_summary.json
                         files_done = set()
                         run_summ_json = os.path.join(tempdir_out, 'run_summary.json')
-                        with open(run_summ_json, 'r') as f:
-                            res = json.load(f)
+                        with open(run_summ_json, 'r') as r:
+                            res = json.load(r)
                             for p in res['processed_files']:
                                 assert p['passed']
                                 files_done.add(p['filepath'])
@@ -342,8 +350,8 @@ class UnstableSDKTestCase(object):
 
                         # Check they are all in the combined result.
                         combined_json = os.path.join(tempdir_out, 'results.json')
-                        with open(combined_json, 'r') as f:
-                            res = json.load(f)
+                        with open(combined_json, 'r') as c:
+                            res = json.load(c)
                             res = res['AudioFileResults']
                             assert len(res) == len(all_contrived)
                             audio_file_urls = {single['AudioFileUrl'] for single in res}

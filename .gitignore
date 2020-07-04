@@ -5,6 +5,7 @@ dist/
 
 # PyCache (IDE associated)
 batchkit/__pycache__/
+example/__pycache__/
 examples/speech_sdk/__pycache__/
 tests/__pycache__/
 

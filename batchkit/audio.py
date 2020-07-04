@@ -170,23 +170,6 @@ def is_valid_audio_file(file_path):
     supported_extensions = native_extensions + conversion_extensions
     is_valid = os.path.isfile(file_path) and os.path.splitext(file_path)[1].lower() in supported_extensions
     if not is_valid:
-        logger.warning("{0} is not a file or does not have a supported extension".format(file_path))
+        logger.warning("{0} is not a valid file or does not have a supported extension".format(file_path))
 
     return is_valid
-
-
-def filter_audio_files(file_list, base_dir=None):
-    """
-    Check if audio file specified is a real file and if it has the right extension
-    :param file_list: file to check
-    :param base_dir: base directory for the file list
-    :return: qualified audio files
-    """
-    for f in file_list:
-        if base_dir is None:
-            file_path = f
-        else:
-            file_path = os.path.join(base_dir, f)
-        file_path = os.path.abspath(file_path)
-        if is_valid_audio_file(file_path):
-            yield file_path

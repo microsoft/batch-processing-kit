@@ -126,6 +126,7 @@ class BatchRequest(ABC):
         """
         cls = None
         candidates: List[type] = BatchRequest.find_subtypes()
+        logger.debug("BatchRequest subtypes on sys.path identified: {0}".format(candidates))
         for candid in candidates:
             if 'from_config' in dir(candid) and \
                     candid.from_config != BatchRequest.from_config:  # User actually overrides the static method
@@ -140,12 +141,22 @@ class BatchRequest(ABC):
             err = BadRequestError(
                 "Unable to find subtype of BatchRequest in the syspath with signature"
                 "like that expected:  "
-                "@staticmethod   def from_config(files: List[str], config: {0}".format(type(config).__name__))
+                "@staticmethod   def from_config(files: List[str], config: {0})".format(type(config).__name__))
             logger.warning("Unable to parse BatchRequest from config of type {0}: {1}. Reason: {2}".format(
                 type(config).__name__, config.__dict__, str(err)))
             raise err
 
         return cls.from_config(files, config)
+
+    @staticmethod
+    def find_type(config: BatchConfig) -> type:
+        """
+        Given a BatchConfig instance, find the corresponding type of BatchRequest.
+        :param config: instance of a concrete subtype of BatchConfig.
+        :returns: any subtype of BatchRequest that can be found in the sys.path that can be
+                  created from that subtype of BatchConfig. See: BatchRequest.from_config() static method.
+        """
+        return type(BatchRequest.from_config([], config))
 
     @abstractmethod
     def make_work_items(self, output_dir: str,
@@ -159,7 +170,7 @@ class BatchRequest(ABC):
         pass
 
     @staticmethod
-    def get_endpoint_status_checker(self, leq: LogEventQueue) -> EndpointStatusChecker:
+    def get_endpoint_status_checker(leq: LogEventQueue) -> EndpointStatusChecker:
         """
         Get an EndpointStatusChecker for the kind of endpoints that are capable of
         processing this type of BatchRequest. This should be overridden by the BatchRequest subtype,
@@ -169,4 +180,14 @@ class BatchRequest(ABC):
 
     @abstractmethod
     def get_batch_run_summarizer(self) -> BatchRunSummarizer:
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def is_valid_input_file(file: str) -> bool:
+        """
+        Query whether a particular file appears to be a valid work item.
+        :param file: the relative or absolute filepath
+        :return: boolean whether the file is a valid work item
+        """
         pass

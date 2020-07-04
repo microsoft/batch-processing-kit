@@ -19,11 +19,11 @@ import psutil
 import requests
 import resource
 from multiprocessing import pool
-from typing import Any, Optional, Set
+from typing import Any, Optional, Set, List, Callable, Iterable
 from random import random
 from multiprocessing.connection import Connection
 
-from .audio import filter_audio_files
+from batchkit.audio import is_valid_audio_file
 
 logger = logging.getLogger("batch")
 
@@ -217,48 +217,54 @@ class NonDaemonicPool(pool.Pool):
             self.target_num_procs = num_procs
 
 
-def get_audio_files(input_folder: str, input_list: Optional[str] = None) -> Set[str]:
+def get_input_files(input_folder: str,
+                    predicate: Callable[[str], bool],
+                    input_list: Optional[str] = None) -> Set[str]:
     """
-    Discover all audio files in the input folder matching the given input list
-    :param input_folder: folder where audio files reside
+    Discover all valid files that can be work items in an input folder.
+    :param input_folder: folder where work item files may reside
+    :param predicate: function that qualifies whether a file is a valid input work item.
     :param input_list: filepath to a list of files in the `input_folder` to be considered.
                        If None, then all files in `input_folder` are considered.
-    :return: set of audio files. If the input directory or the non-None input_list
+    :return: set of qualified files. If the input directory or the non-None input_list
              are non-existent paths, then this returns None. Full paths are returned.
     """
-    # Do some validation if audio files are to be limited by `input_list`.
-    audio_files = set()
+    # Do some validation if files are to be limited by `input_list`.
+    input_files = set()
     if os.path.isdir(input_folder):
-        audio_files = {
-            f for f in
-            (os.listdir(input_folder), input_folder)
+        input_files = {
+            f for f in filter_input_files(os.listdir(input_folder), predicate, input_folder)
         }
     else:
         logger.error("Input directory {0} does not exist!".format(input_folder))
         return set()
-    audio_file_list = set()
+    file_list: Set[str] = set()
     if input_list is not None:
         if os.path.isfile(input_list):
             with open(os.path.abspath(input_list)) as input_list_file:
                 file_list = set(input_list_file.read().splitlines())
 
             # set comprehension using { }
-            audio_file_list = {
-                f for f in filter_audio_files(file_list)
-            }
+            file_list = {
+                # If the file_list gives the absolute paths
+                f for f in filter_input_files(file_list, predicate)
+            }.union({
+                # If the file_list entries are only with respect to the input_folder
+                f for f in filter_input_files(file_list, predicate, input_folder)
+            })
         else:
             logger.error("Input list {0} does not exist!".format(input_list))
             return set()
     else:
-        audio_file_list = audio_files.copy()
+        file_list = input_files.copy()
 
-    r = audio_files & audio_file_list
+    r = input_files & file_list
     if len(r) == 0:
         if input_list is None:
-            logger.warning("No candidate audio files in input directory {0}".format(input_folder))
+            logger.warning("No candidate work files in input directory {0}".format(input_folder))
         else:
             logger.warning(
-                "No candidate audio files in input directory {0} matching the input list".format(input_folder)
+                "No candidate work files in input directory {0} matching the input list".format(input_folder)
             )
     return r
 
@@ -295,7 +301,7 @@ def move_files(src_dir: str, targ_dir: str, extension: str, exclude: list = [], 
                     raise
                 else:
                     logger.warning(
-                        "write_json_file_atomic(): Exception while moving: "
+                        "move_files(): Exception while moving: "
                         "{0} -> {1}. Details: {2} {3} Errno:{4}".format(
                             src_path, targ_path, type(err).__name__, err.strerror, err.errno))
 
@@ -423,3 +429,21 @@ def __test_gate_oserror():
     prob = os.getenv("PROB_IO_OSERROR")
     if prob and random() < float(prob):
         raise OSError("Emulated OSError")
+
+
+def filter_input_files(file_list: Iterable[str], predicate: Callable[[str], bool], base_dir=None) -> Iterable[str]:
+    """
+    Check if the input files specified are suitable work files using a user-provided predicate.
+    :param file_list: candidate files to check
+    :param predicate: function that determines whether each file is a valid input work item.
+    :param base_dir: base directory for the file list
+    :return: qualified files list (absolute filepaths)
+    """
+    for f in file_list:
+        if base_dir is None:
+            file_path = f
+        else:
+            file_path = os.path.join(base_dir, f)
+        file_path = os.path.abspath(file_path)
+        if predicate(file_path):
+            yield file_path

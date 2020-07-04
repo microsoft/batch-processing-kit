@@ -16,7 +16,7 @@ from pyinotify import ThreadedNotifier
 from .batch_request import BatchRequest
 from .batch_status import BatchStatusProvider, BatchStatusEnum
 from .endpoint_manager import EndpointManager
-from .endpoint_status import EndpointStatusChecker
+from .endpoint_status import EndpointStatusChecker, UnknownEndpointStatusChecker
 from .handlers import notify_file_modified
 from .endpoint_config import load_configuration
 from .utils import write_json_file_atomic, write_single_output_json, \
@@ -198,11 +198,15 @@ class Orchestrator:
                 snap_run_summarizer: BatchRunSummarizer = self._summarizer
                 snap_batch_id: int = self._on_batch_id
 
-            summary_json = snap_run_summarizer.run_summary(
-                snap_work_results, snap_file_queue_size,
-                snap_num_running, self._start_time, len(self._endpoint_managers),
-                log_conclusion_msg
-            )
+            summary_json = {}
+            # It's uncommon that a run summarizer wouldn't be available yet but this could
+            # happen for example by signaling early termination to the Orchestrator.
+            if snap_run_summarizer:
+                summary_json = snap_run_summarizer.run_summary(
+                    snap_work_results, snap_file_queue_size,
+                    snap_num_running, self._start_time, len(self._endpoint_managers),
+                    log_conclusion_msg
+                )
 
             # Write the summary json file
             if write_run_summary:
@@ -379,18 +383,30 @@ class Orchestrator:
             gen = self._endpoint_generation
             self._endpoint_generation += 1
 
+            # Get an EndpointStatusChecker for the type of the
+            # BatchRequest that is currently being processed.
+            ep_status_checker: EndpointStatusChecker
+            if isinstance(None, self._on_batch_type):
+                ep_status_checker = UnknownEndpointStatusChecker(self._log_event_que)
+            else:
+                ep_status_checker = self._on_batch_type.get_endpoint_status_checker(self._log_event_que)
+
             try:
                 # Determine EndpointManagers that need to be deleted (modified, new,
                 # or no longer exist). Do not touch EndpointManagers that have not changed.
                 new_em_objs: List[EndpointManager] = []
+                # Start by assuming every EndpointManager needs to be deleted.
                 deleted_em_configs: Dict[str, Dict] = \
                     {em.endpoint_name: em.endpoint_config for em in self._endpoint_managers}
+
                 for endpoint_name, endpoint_config in config_data.items():
+                    # If an existing endpoint is totally preserved in the new config, don't delete it.
                     if endpoint_name in deleted_em_configs and \
                       endpoint_config == deleted_em_configs[endpoint_name]:
                         # Don't delete this EndpointManager and don't make a new one.
                         del deleted_em_configs[endpoint_name]
                         continue
+
                     new_em_objs.append(
                         EndpointManager(
                             "HotswapGen{0}_{1}".format(str(gen), endpoint_name),
@@ -405,9 +421,7 @@ class Orchestrator:
                             self.notify_work_success,
                             # on EndpointManager reports failure
                             self.notify_work_failure,
-                            # Get an EndpointStatusChecker for the type of the
-                            # BatchRequest that is currently being processed.
-                            self._on_batch_type.get_endpoint_status_checker(self._log_event_que)
+                            ep_status_checker,
                         )
                     )
             # Validation of the config could fail or invalid yaml may have been given, etc.
@@ -461,10 +475,8 @@ class Orchestrator:
 
             # Ensure that they are all using the correct type of EndpointStatusChecker
             # which depends on the subtype of BatchRequest we are currently processing.
-            status_checker: EndpointStatusChecker = \
-                self._on_batch_type.get_endpoint_status_checker(self._log_event_que)
             for m in self._endpoint_managers:
-                m.set_endpoint_status_checker(status_checker)
+                m.set_endpoint_status_checker(ep_status_checker)
 
         logger.info("Set new EndpointManagers after hot-swap: {0}".format(config_data))
 

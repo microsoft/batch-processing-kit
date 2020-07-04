@@ -20,7 +20,8 @@ In this test module, there are primarily three things under test:
 """
 
 logger = logging.getLogger("test_pool_tee")
-logger.level = logging.DEBUG
+# logger.level = logging.DEBUG
+logger.level = logging.INFO
 log_stream_handler = logging.StreamHandler(sys.stdout)
 
 # Toggle this to get useful debug trace.
@@ -101,17 +102,20 @@ def work_entry(somearg: int) -> Tuple[int, int]:
 count_pool_success = 0
 count_pool_errors = 0
 
+
 def on_finish(anything: Any):
     global count_pool_success
     lock.acquire()
     count_pool_success += 1
     lock.release()
 
+
 def on_error(anything: Any):
     global count_pool_errors
     lock.acquire()
     count_pool_errors += 1
     lock.release()
+
 
 class TestPoolWithTee(unittest.TestCase):
 

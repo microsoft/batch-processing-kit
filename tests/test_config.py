@@ -1,5 +1,8 @@
+import logging
 from unittest import TestCase, main
 from unittest.mock import patch
+
+import batchkit
 from batchkit.endpoint_config import normalize_validate_config
 from .test_base import MockDevice
 from deepdiff import DeepDiff
@@ -67,6 +70,9 @@ class ConfigTestCase(ConfigTestCaseBase):
         self.assertTrue(validated_dict["localhost"]["isCloudService"], self.dump_dict(validated_dict))
         self.assertTrue(validated_dict["localhost"]["isSecure"], self.dump_dict(validated_dict))
         self.assertEqual(validated_dict["localhost"]["port"], 443, self.dump_dict(validated_dict))
+
+    def setUp(self) -> None:
+        batchkit.endpoint_config.logger.level = logging.CRITICAL  # Set to DEBUG for debugging.
 
 
 if __name__ == '__main__':
