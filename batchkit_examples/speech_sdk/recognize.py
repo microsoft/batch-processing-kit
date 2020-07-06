@@ -72,7 +72,7 @@ def run_recognizer(request: SpeechSDKWorkItemRequest, rtf: float,
                 when pushing the stream to server.
     :param endpoint_config: about the endpoint to use
     :param log_event_queue: object for enqueueing events to be logged asap.
-    :params cancellation_token: Event signalling that the work should be cancelled.
+    :param cancellation_token: Event signalling that the work should be cancelled.
     :return: an instance of SpeechSDKWorkItemResult.
     """
 
@@ -98,7 +98,6 @@ class FileRecognizer:
             endpoint_config["host"],
             endpoint_config["port"]
         )
-        self._failed_previously = False
         self._subscription = endpoint_config.get("subscription")
         self._language = endpoint_config["language"]
         self._log_event_queue = log_event_queue
@@ -160,7 +159,6 @@ class FileRecognizer:
             can_retry = e.__class__ in [EndpointDownError, FailedRecognitionError,
                                         ChildProcessError, CancellationTokenException, OSError]
             error_type = type(e).__name__
-            self._failed_previously = True
 
         latency = time.time() - start
 
@@ -186,12 +184,11 @@ class FileRecognizer:
         :param audio_file: original audio file to recognize
         :param json_data: any result from a previous run of this file even if it was a failed transcription
         """
-        # Was this connection unhealthy in the past? If yes, we need to wait before attempting to connect to it again
-        if self._failed_previously:
-            address, port = self._host.split("//")[1].split(":")
-            if not SpeechSDKEndpointStatusChecker(self._log_event_queue). \
-                    check_endpoint(address, port, False, True):
-                raise EndpointDownError("Target {0} in process {1} failed.".format(self._host, current_process().name))
+        # Check that this endpoint is actually healthy.
+        address, port = self._host.split("//")[1].split(":")
+        if not SpeechSDKEndpointStatusChecker(self._log_event_queue). \
+                check_endpoint(address, port, False, True):
+            raise EndpointDownError("Target {0} in process {1} failed.".format(self._host, current_process().name))
 
         # Prepare to fork off the work to a child proc for isolation
         # from non-recoverable faults, and we'll wait.
@@ -361,7 +358,9 @@ class FileRecognizer:
             speech_config.set_property(speechsdk.PropertyId.Speech_LogFilename, output_file_log)
             speech_config.set_property_by_name("SPEECH-FileLogSizeMB", "10")
 
-        if self._allow_resume:
+        if self._allow_resume and start_offset_secs > 0.0:
+            self._log_event_queue.info("RESUMING file {0} from offset {1} seconds".format(
+                audio_file_basename, start_offset_secs))
             callback = WavFileReaderCallback(
                 filename=converted_audio_file,
                 offset=start_offset_secs,  # in seconds
@@ -414,8 +413,8 @@ class FileRecognizer:
                     self._log_event_queue.log(LogLevel.DEBUG,
                                               "RECOGNIZED: {0}".format(segment_json))
                     json_result_list.append(segment_json)
-                    last_processed_offset_secs = \
-                        float(segment_json["Offset"] + segment_json["Duration"]) / TIME_UNIT
+                    last_processed_offset_secs = start_offset_secs + \
+                        (float(segment_json["Offset"] + segment_json["Duration"]) / TIME_UNIT)
 
             # Early cancellation by the cancellation_token.
             if cancellation_token.is_set():
