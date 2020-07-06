@@ -22,6 +22,10 @@ from .audio import WavFileReaderCallback
 from .endpoint_status import SpeechSDKEndpointStatusChecker
 
 
+# Time unit for the Speech SDK
+TIME_UNIT: float = 10000000.0
+
+
 # Dependency Injection permitting mocked behavior of the SDK.
 # If desirable, this must be a function that imports the module.
 speechsdk_provider = None
@@ -273,19 +277,14 @@ class FileRecognizer:
         assert audio_duration is not None
 
         if self._allow_resume and json_data is not None:
-            start_offset = json_data.get("LastProcessedOffsetInSeconds", 0.0)
+            start_offset_secs = json_data.get("LastProcessedOffsetInSeconds", 0.0)
             segment_results = json_data.get("SegmentResults", list())
             combined_results = json_data.get("CombinedResults", list())
         else:
-            start_offset = 0.0
+            start_offset_secs = 0.0
             segment_results = list()
-            combined_results = [{
-                "ChannelNumber": None,
-                "Lexical": "",
-                "ITN": "",
-                "MaskedITN": "",
-                "Display": "",
-            }]
+            combined_results = list()
+        last_processed_offset_secs: float = start_offset_secs
 
         # @TODO: Confining module import to here limits terminal process fault risk to only the process
         # in which this method executes, at the tradeoff of measured 10-100 ms cpu. This lazy load of the
@@ -301,13 +300,6 @@ class FileRecognizer:
                                                speech_recognition_language=self._language)
 
         speech_config.request_word_level_timestamps()
-        # @TODO: This is a bug in the FE service, not honoring request_word_level_timestamps(), so we apply the
-        # following workaround with URI query parameter. REMOVE ONCE FIXED!
-        speech_config.set_service_property(
-            name='speechcontext-PhraseOutput.Detailed.Options',
-            value='["WordTimings"]',
-            channel=speechsdk.ServicePropertyChannel.UriQueryParameter
-        )
         speech_config.set_service_property(
             name='speechcontext-PhraseOutput.Format',
             value='Detailed',
@@ -316,8 +308,8 @@ class FileRecognizer:
 
         if self._enable_sentiment:
             speech_config.set_service_property(
-                name='speechcontext-PhraseOutput.Detailed.Extensions',
-                value='["Sentiment"]',
+                name='speechcontext-PhraseOutput.Detailed.Options',
+                value='["Sentiment","WordTimings"]',
                 channel=speechsdk.ServicePropertyChannel.UriQueryParameter
             )
             speech_config.set_service_property(
@@ -325,9 +317,16 @@ class FileRecognizer:
                 value='true',
                 channel=speechsdk.ServicePropertyChannel.UriQueryParameter
             )
+
             speech_config.set_service_property(
-                name='punctuation',
-                value='implicit',
+                name='speechcontext-phraseDetection.sentimentAnalysis.modelversion',
+                value='latest',
+                channel=speechsdk.ServicePropertyChannel.UriQueryParameter
+            )
+        else:
+            speech_config.set_service_property(
+                name='speechcontext-PhraseOutput.Detailed.Options',
+                value='["WordTimings"]',
                 channel=speechsdk.ServicePropertyChannel.UriQueryParameter
             )
 
@@ -365,7 +364,7 @@ class FileRecognizer:
         if self._allow_resume:
             callback = WavFileReaderCallback(
                 filename=converted_audio_file,
-                offset=start_offset,
+                offset=start_offset_secs,  # in seconds
                 log_event_queue=self._log_event_queue
             )
             stream = speechsdk.audio.PullAudioInputStream(callback, callback.audio_format())
@@ -385,28 +384,38 @@ class FileRecognizer:
             done_event.set()
             if evt.result.reason == speechsdk.ResultReason.Canceled and \
                     evt.cancellation_details.reason == speechsdk.CancellationReason.Error:
-                is_success = False
-                error_details = str(evt.cancellation_details)
-                self._log_event_queue.log(LogLevel.DEBUG,
-                                          "Error transcribing {0}, details: {1}".format(audio_file, error_details))
+                # WORKAROUND: For a known bug with erroneous InternalServerError returned by SRFrontEnd
+                # only in sentiment mode at end of file:
+                if self._enable_sentiment and last_processed_offset_secs >= audio_duration - 60:
+                    # work-around taken. do not mark as failed.
+                    pass
+                else:
+                    is_success = False
+                    error_details = str(evt.cancellation_details)
+                    self._log_event_queue.log(LogLevel.DEBUG,
+                                              "Error transcribing {0}, details: {1}".format(audio_file, error_details))
 
         def audio_recognized(evt):
             """
             callback that catches the recognized result of audio from an event 'evt'.
             :param evt: event listened to catch recognition result.
             """
-            nonlocal json_result_list, cancel_msg, cancellation_token
+            nonlocal json_result_list, cancel_msg, cancellation_token, last_processed_offset_secs
             if evt.result.reason == speechsdk.ResultReason.RecognizedSpeech:
                 # Append non empty ones to a list of jsons, we can have multiple results for longer audio
                 if evt.result.json:
-                    self._log_event_queue.log(LogLevel.INFO,
+                    self._log_event_queue.log(
+                        LogLevel.INFO,
                         "RECOGNIZED event for file: {0} sent by endpoint: {1} handled by process: {2}".format(
                             audio_file_basename, self._host, current_process().name
                         )
                     )
+                    segment_json = json.loads(evt.result.json)
                     self._log_event_queue.log(LogLevel.DEBUG,
-                                              "RECOGNIZED: {0}".format(json.loads(evt.result.json)))
-                    json_result_list.append(evt.result.json)
+                                              "RECOGNIZED: {0}".format(segment_json))
+                    json_result_list.append(segment_json)
+                    last_processed_offset_secs = \
+                        float(segment_json["Offset"] + segment_json["Duration"]) / TIME_UNIT
 
             # Early cancellation by the cancellation_token.
             if cancellation_token.is_set():
@@ -451,10 +460,13 @@ class FileRecognizer:
                 "AudioLengthInSeconds": audio_duration,
                 "TranscriptionStatus": "Succeeded" if is_success else "Failed",
                 "SegmentResults": segment_results,
-                "CombinedResults": combined_results
+                "CombinedResults": combined_results,
+                "LastProcessedOffsetInSeconds": last_processed_offset_secs,
             }
 
-        self.populate_json_results(final_json, json_result_list)
+        # Emplace the segment results and combined result into the `final_json`.
+        # This also has the side effect of fixing the offsets if start_offset_secs was not zero.
+        self.populate_json_results(final_json, json_result_list, start_offset_secs)
 
         # Write json output irrespective of whether the recognition was successful; also make it atomic
         # in case this work item has a duplicate.
@@ -476,14 +488,16 @@ class FileRecognizer:
 
         return audio_duration
 
-    def populate_json_results(self, final_json, json_result_list):
+    def populate_json_results(self, final_json, json_result_list, start_offset_secs: float):
         # If there were any results coming back (it was not all silence), put them together
-        def add_offsets(json_entry):
+        def fix_offsets(json_entry):
             """
-            Add offset and Duration in seconds
+            Correct offset with respect to actual start_offset_secs, and
+            add offset and duration in seconds.
             """
-            TIME_UNIT = 10000000.0
+            start_offset = int(start_offset_secs * TIME_UNIT)
             if "Offset" in json_entry:
+                json_entry["Offset"] += start_offset
                 json_entry["OffsetInSeconds"] = json_entry["Offset"] / TIME_UNIT
             if "Duration" in json_entry:
                 json_entry["DurationInSeconds"] = json_entry["Duration"] / TIME_UNIT
@@ -493,8 +507,7 @@ class FileRecognizer:
             itn = list()
             masked_itn = list()
             display = list()
-            for json_result_str in json_result_list:
-                json_result = json.loads(json_result_str)
+            for json_result in json_result_list:
                 json_result["ChannelNumber"] = None
                 if "NBest" in json_result:
                     nbest_list = json_result["NBest"]
@@ -508,9 +521,9 @@ class FileRecognizer:
                     display.append(top_result["Display"])
                     if "Words" in top_result:
                         for word in top_result["Words"]:
-                            add_offsets(word)
+                            fix_offsets(word)
 
-                add_offsets(json_result)
+                fix_offsets(json_result)
                 final_json["SegmentResults"].append(json_result)
 
             # Also put together the combined results
@@ -520,6 +533,16 @@ class FileRecognizer:
                 "ITN": " ".join(itn),
                 "MaskedITN": " ".join(masked_itn),
                 "Display": " ".join(display),
+            })
+        else:
+            # If there were no segments recognized, show the combined result
+            # fields but with empty strings.
+            final_json["CombinedResults"].append({
+                "ChannelNumber": None,
+                "Lexical": "",
+                "ITN": "",
+                "MaskedITN": "",
+                "Display": "",
             })
 
     def get_cached_result(self, audio_file, dirs: List[str]):
