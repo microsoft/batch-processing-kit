@@ -1,5 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+import multiprocessing
+from typing import Callable
 
 import pyinotify
 import logging
@@ -38,15 +40,17 @@ class DirectoryWatchHandler(pyinotify.ProcessEvent):
     Handler for inotify event for modified/added files in a work directory, such as files
     corresponding to work items (audio file, image file, text file, etc..).
     """
-    def my_init(self, queue, leq: LogEventQueue):
+    def my_init(self, queue: multiprocessing.Queue, leq: LogEventQueue, predicate: Callable[[str], bool]):
         """
         Keep a handle on the process pool at init time so we can terminate it later if needed
-        :param queue: queue onto which new audio files will be placed
+        :param queue: queue onto which new files will be placed if they qualify as work items.
         :param leq: instance of LogEventQueue to be used for logging
+        :param predicate: function that qualifies new files as being candidate work items.
         :return: None
         """
-        self._queue = queue
-        self._leq = leq
+        self._queue: multiprocessing.Queue = queue
+        self._leq: LogEventQueue = leq
+        self._predicate: Callable[[str], bool] = predicate
 
     def process_IN_CLOSE_WRITE(self, event):
         """
@@ -55,11 +59,11 @@ class DirectoryWatchHandler(pyinotify.ProcessEvent):
         :return:
         """
         audio_file = event.pathname
-        if is_valid_audio_file(audio_file):
+        if self._predicate(audio_file):
             self._leq.info("File {0} changed/added, adding it to processing list!".format(audio_file))
             self._queue.put(audio_file)
         else:
-            self._leq.warning("{0} is not a file or does not have a supported extension".format(audio_file))
+            self._leq.warning("{0} is not a regular file or is not a supported work item".format(audio_file))
 
 
 def notify_file_modified(filename, callback, leq):
@@ -88,14 +92,17 @@ def notify_file_modified(filename, callback, leq):
     return notifier
 
 
-def update_work_on_directory_content_change(directory, queue, leq):
+def update_work_on_directory_content_change(directory, queue, leq, predicate):
     """
     Creates a "modify" directory watch on an input folder, which dynamically adds work
     :param directory: directory to add a watch for
+    :type directory: str
     :param queue: list for audio files dynamically added (out parameter)
     :type queue: multiprocessing.Queue
     :param leq: instance of LogEventQueue to be used for logging
     :type leq: LogEventQueue
+    :param predicate: function that qualifies new files as being candidate work items.
+    :type predicate: Callable[[str], bool]
     :return: notifier object
     :rtype: pyinotify.ThreadedNotifier
     """
@@ -106,7 +113,7 @@ def update_work_on_directory_content_change(directory, queue, leq):
     wm = pyinotify.WatchManager()
     notifier = pyinotify.ThreadedNotifier(
         wm,
-        DirectoryWatchHandler(queue=queue, leq=leq)
+        DirectoryWatchHandler(queue=queue, leq=leq, predicate=predicate)
     )
     notifier.daemon = True
     notifier.name = "DirectoryContentChangeNotifierThread"

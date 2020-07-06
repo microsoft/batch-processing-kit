@@ -1,16 +1,19 @@
 import logging
 import sys
 import multiprocessing
-from typing import List
+from argparse import Namespace
+from typing import List, Dict
 from unittest import TestCase
 
 from batchkit.batch_config import BatchConfig
 from batchkit.batch_request import BatchRequest
 from batchkit.logger import LogEventQueue
-from batchkit.work_item import WorkItemRequest
+from batchkit.run_summarizer import BatchRunSummarizer
+from batchkit.work_item import WorkItemRequest, WorkItemResult
 
 logger = logging.getLogger("test_dependency_injection")
-logger.level = logging.DEBUG
+# logger.level = logging.DEBUG
+logger.level = logging.INFO
 log_stream_handler = logging.StreamHandler(sys.stdout)
 
 
@@ -19,6 +22,13 @@ class TBatchConfig(BatchConfig):
         super().__init__()
         self.some_int = some_int
         self.some_bool = some_bool
+
+    @staticmethod
+    def from_args(args: Namespace):
+        return TBatchConfig(
+            args.some_int,
+            args.some_bool
+        )
 
 
 class TWorkItemRequest(WorkItemRequest):
@@ -32,11 +42,27 @@ class TWorkItemRequest(WorkItemRequest):
         log_event_queue.info("Did the work")
 
 
+class TBatchRunSummarizer(BatchRunSummarizer):
+    def __init__(self):
+        super().__init__()
+
+    def run_summary(self, snap_work_results: Dict[str, WorkItemResult], snap_file_queue_size: int,
+                    snap_num_running: int, start_time: float, num_endpoints: int, log_conclusion_msg: bool) -> dict:
+        pass
+
+
 class TBatchRequest(BatchRequest):
     def __init__(self, files: List[str], some_int: int, some_bool: bool):
         super().__init__(files)
         self.some_int = some_int
         self.some_bool = some_bool
+
+    @staticmethod
+    def is_valid_input_file(file: str) -> bool:
+        return True
+
+    def get_batch_run_summarizer(self) -> BatchRunSummarizer:
+        return TBatchRunSummarizer()
 
     @staticmethod
     def from_json(json: dict):

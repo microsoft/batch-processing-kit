@@ -1,10 +1,15 @@
 # Build Artifacts.
-batch_client.egg-info/
+batchkit.egg-info/
+batchkit_examples.egg-info/
+batchkit_examples_speechsdk.egg-info/
 build/
 dist/
 
 # PyCache (IDE associated)
 batchkit/__pycache__/
-examples/speech_sdk/__pycache__/
+batchkit_examples/__pycache__/
+batchkit_examples/speech_sdk/__pycache__/
 tests/__pycache__/
 
+# PyCharm associated
+.idea/

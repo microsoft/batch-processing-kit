@@ -12,7 +12,7 @@ import multiprocessing
 import logging
 from argparse import Namespace
 from collections import namedtuple
-from typing import Optional, List, Set
+from typing import Optional, List, Set, Callable
 
 from .apiserver import ApiServer
 from . import constants
@@ -22,7 +22,7 @@ from .batch_status import BatchStatusProvider, BatchStatusEnum, BatchStatus
 from .handlers import update_work_on_directory_content_change
 from .logger import setup_logging, LogEventQueue
 from .orchestrator import Orchestrator
-from .utils import get_audio_files, flush_queue_into_set, InvalidConfigurationError, \
+from .utils import get_input_files, flush_queue_into_set, InvalidConfigurationError, \
     create_dir, assert_file_exists, move_files, assert_sufficient_openfd_rlimit, \
     kill_children_procs, write_single_output_json
 
@@ -397,14 +397,18 @@ class DaemonClient(Client):
         waiting for new files and submit whatever it finds, in addition
         to files that are present in the input directory initially.
         """
+        # Function to be used for qualifying files in the input directory as valid work items.
+        predicate: Callable[[str], bool] = \
+            getattr(BatchRequest.find_type(self.batch_config), "is_valid_input_file")
+
         # Race condition between reading initial files and hooking for deltas
         # solved by hooking for deltas then reading initial files and de-duping.
         self._work_notifier = update_work_on_directory_content_change(
-            self.settings.input_folder, self._next_batch_files_que, self.log_queue)
+            self.settings.input_folder, self._next_batch_files_que, self.log_queue, predicate)
         submitted = set()  # all files ever submitted at any time since process started
 
-        audio_files = get_audio_files(self.settings.input_folder, None)
-        for audio_file in audio_files:
+        input_files: Set[str] = get_input_files(self.settings.input_folder, predicate, None)
+        for audio_file in input_files:
             self._next_batch_files_que.put(audio_file)
 
         # Keep submitting new batch with whatever new files came in, only
@@ -494,7 +498,10 @@ class OneShotClient(Client):
         are cancelled. The more violent SIGINT also terminates immediately but
         offers no guarantee on result file integrity.
         """
-        files: Set[str] = get_audio_files(self.settings.input_folder, self.settings.input_list)
+        predicate: Callable[[str], bool] = \
+            getattr(BatchRequest.find_type(self.batch_config), "is_valid_input_file")
+        files: Set[str] = get_input_files(self.settings.input_folder, predicate, self.settings.input_list)
+
         if len(files) == 0:
             logger.error("No candidate audio files. Leaving run.")
             self.finish()
