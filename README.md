@@ -3,7 +3,7 @@
 The Batch Processing Kit can be used for transcription of very large numbers of audio files against
 Azure Cognitive Service Speech containers or cloud endpoints.
 
-For introduction, see: https://review.docs.microsoft.com/en-us/azure/cognitive-services/speech-service/speech-container-batch-processing
+For introduction, see: https://docs.microsoft.com/azure/cognitive-services/speech-service/speech-container-batch-processing
 
 # Contributing
 
