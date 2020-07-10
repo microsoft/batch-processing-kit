@@ -1,7 +1,19 @@
 # Introduction
 
-The Batch Processing Kit can be used for transcription of very large numbers of audio files against
-Azure Cognitive Service Speech containers or cloud endpoints.
+Generic batch processing framework for managing the orchestration, dispatch, fault tolerance, and monitoring of 
+arbitrary work items against many endpoints. Extensible via dependency injection. 
+
+Includes examples against Azure Cognitive Service containers for ML eval workloads.
+
+# Usage
+
+The `batchkit` package is available as a pypi distribution. See versions here: https://pypi.org/project/batchkit
+
+# Examples
+
+### Speech Batch Kit
+The Speech Batch Kit (batchkit_examples/speech_sdk) uses the framework to produce a tool that can be used for
+transcription of very large numbers of audio files against Azure Cognitive Service Speech containers or cloud endpoints.
 
 For introduction, see: https://docs.microsoft.com/azure/cognitive-services/speech-service/speech-container-batch-processing
 

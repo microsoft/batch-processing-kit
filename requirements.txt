@@ -16,7 +16,7 @@ Flask==1.1.1
 jsonpickle>=1.3
 requests>=2.23.0
 psutil>=5.7.0
-pygobject~=3.26.1
+pygobject~=3.36.1
 
 ### examples
 
