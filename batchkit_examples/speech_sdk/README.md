@@ -10,8 +10,10 @@ The Speech Batch Kit can be used for transcription of very large numbers of audi
 The Speech Batch Kit runs in its own container and offers a number of built-in facilities to rapidly scale transcription work
 against hundreds of such speech containers (or a few cloud endpoints) with minimal effort. The official Azure page
 describing Speech Batch Kit [can be found here](https://docs.microsoft.com/en-us/azure/cognitive-services/speech-service/speech-container-batch-processing?tabs=oneshot).
-  
- ![](https://docs.microsoft.com/en-us/azure/cognitive-services/speech-service/media/containers/general-diagram.png)
+
+ <p align="center">
+  <img src="https://docs.microsoft.com/en-us/azure/cognitive-services/speech-service/media/containers/general-diagram.png" />
+</p>
  
 ### Features
 
