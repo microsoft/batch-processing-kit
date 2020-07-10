@@ -7,7 +7,7 @@ Includes examples against Azure Cognitive Service containers for ML eval workloa
 
 # Usage
 
-The `batchkit` package is available as a pypi distribution. See versions here: https://pypi.org/project/batchkit
+The `batchkit` package is available as an ordinary pypi package. See versions here: https://pypi.org/project/batchkit
 
 # Examples
 
@@ -15,7 +15,9 @@ The `batchkit` package is available as a pypi distribution. See versions here: h
 The Speech Batch Kit (batchkit_examples/speech_sdk) uses the framework to produce a tool that can be used for
 transcription of very large numbers of audio files against Azure Cognitive Service Speech containers or cloud endpoints.
 
-For introduction, see: https://docs.microsoft.com/azure/cognitive-services/speech-service/speech-container-batch-processing
+For introduction, see the [Azure Cognitive Services page](https://docs.microsoft.com/azure/cognitive-services/speech-service/speech-container-batch-processing).
+
+For detailed information, see the [speech batch kit's README](https://github.com/microsoft/batch-processing-kit/blob/master/batchkit_examples/README.md).
 
 # Contributing
 
