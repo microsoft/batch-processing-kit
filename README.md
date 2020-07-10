@@ -17,7 +17,7 @@ transcription of very large numbers of audio files against Azure Cognitive Servi
 
 For introduction, see the [Azure Cognitive Services page](https://docs.microsoft.com/azure/cognitive-services/speech-service/speech-container-batch-processing).
 
-For detailed information, see the [speech batch kit's README](https://github.com/microsoft/batch-processing-kit/blob/master/batchkit_examples/README.md).
+For detailed information, see the [Speech Batch Kit's README](https://github.com/microsoft/batch-processing-kit/blob/master/batchkit_examples/speech_sdk/README.md).
 
 # Contributing
 
