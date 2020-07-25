@@ -6,7 +6,6 @@ from typing import Callable
 import pyinotify
 import logging
 import os
-from .audio import is_valid_audio_file
 from .logger import LogEventQueue
 
 logger = logging.getLogger("batch")

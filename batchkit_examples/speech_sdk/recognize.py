@@ -15,10 +15,9 @@ from typing import List
 from batchkit.logger import LogEventQueue, LogLevel
 from batchkit.utils import sha256_checksum, get_input_output_file_names, write_json_file_atomic, \
     EndpointDownError, FailedRecognitionError, tee_to_pipe_decorator, CancellationTokenException
-from batchkit.audio import init_gstreamer, convert_audio
 from batchkit.constants import RECOGNIZER_SCOPE_RETRIES
 from .work_item import SpeechSDKWorkItemRequest, SpeechSDKWorkItemResult
-from .audio import WavFileReaderCallback
+from .audio import init_gstreamer, convert_audio, WavFileReaderCallback
 from .endpoint_status import SpeechSDKEndpointStatusChecker
 
 
@@ -270,7 +269,7 @@ class FileRecognizer:
         cancel_msg = None
 
         init_gstreamer()
-        converted_audio_file, audio_duration = convert_audio(audio_file)
+        converted_audio_file, audio_duration = convert_audio(audio_file, self._log_event_queue)
         assert audio_duration is not None
 
         if self._allow_resume and json_data is not None:
