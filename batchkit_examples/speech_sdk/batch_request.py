@@ -3,7 +3,6 @@
 
 from typing import List
 
-from batchkit import audio
 from batchkit.batch_request import BatchRequest
 from batchkit.logger import LogEventQueue
 from batchkit.utils import BadRequestError
@@ -12,6 +11,8 @@ from batchkit_examples.speech_sdk.batch_config import SpeechSDKBatchConfig
 from batchkit_examples.speech_sdk.endpoint_status import SpeechSDKEndpointStatusChecker
 from batchkit_examples.speech_sdk.run_summarizer import SpeechSDKBatchRunSummarizer
 from batchkit_examples.speech_sdk.work_item import SpeechSDKWorkItemRequest
+
+from . import audio
 
 
 class SpeechSDKBatchRequest(BatchRequest):

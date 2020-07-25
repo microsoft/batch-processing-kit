@@ -16,14 +16,12 @@ import time
 from queue import Empty
 
 import psutil
-import requests
 import resource
 from multiprocessing import pool
 from typing import Any, Optional, Set, List, Callable, Iterable
 from random import random
 from multiprocessing.connection import Connection
 
-from batchkit.audio import is_valid_audio_file
 
 logger = logging.getLogger("batch")
 

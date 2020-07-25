@@ -3,7 +3,7 @@
 # Sections are selectively picked up during packaging.
 
 ### build-time
-setuptools~=46.0.0
+setuptools
 
 ### batchkit
 requests>=2.23.0
