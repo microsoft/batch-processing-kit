@@ -16,10 +16,9 @@ Flask==1.1.1
 jsonpickle>=1.3
 requests>=2.23.0
 psutil>=5.7.0
-pygobject~=3.36.1
 
 ### examples
-
+pygobject~=3.36.1
 # Needed only for stress tests and batchkit_examples/speech_sdk:
 # NOTE: Speech SDK v1.11.0 has a bug during broken session reconnection with SRFrontEnd; blacklisted
 azure-cognitiveservices-speech==1.10.0
