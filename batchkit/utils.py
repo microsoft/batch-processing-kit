@@ -16,7 +16,6 @@ import time
 from queue import Empty
 
 import psutil
-import resource
 from multiprocessing import pool
 from typing import Any, Optional, Set, List, Callable, Iterable
 from random import random
@@ -362,6 +361,7 @@ def assert_file_exists(path):
 
 
 def assert_sufficient_openfd_rlimit(num_openfd_floor=524288):
+    import resource
     soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
     if soft < num_openfd_floor or hard < num_openfd_floor:
         msg = "Insufficient open file descriptor limit: ulimit -n {} {}".format(soft, hard)
