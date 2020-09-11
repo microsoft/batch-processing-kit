@@ -211,9 +211,14 @@ def is_valid_audio_file(file_path):
 
 class WavFileReaderCallback(speechsdk.audio.PullAudioInputStreamCallback):
     """
-    Class that implements the Pull Audio Stream interface to recognize speech from an audio file
+    Class that implements the Pull Audio Stream interface of SpeechSDK to read audio from a file
+    with a given starting offset and optional ending offset.
     """
-    def __init__(self, filename: str, offset: float, log_event_queue: LogEventQueue):
+    def __init__(self, filename: str, log_event_queue: LogEventQueue, start_offset: float, end_offset: float = 0.0):
+        """
+        :param end_offset: if 0.0, means end_offset is actually end-of-file. Anything > 0 will limit the right bound
+                           except end_offset is capped to the last frame.
+        """
         super().__init__()
         self.filename = filename
         self._file_h = wave.open(filename, mode=None)
@@ -221,23 +226,38 @@ class WavFileReaderCallback(speechsdk.audio.PullAudioInputStreamCallback):
         self.sample_width = self._file_h.getsampwidth()
         self.frame_rate = self._file_h.getframerate()
         self.num_channels = self._file_h.getnchannels()
+        # May change in the future if this application supports separate per-channel ASR.
+        assert self.num_channels == 1
         self.compression_type = self._file_h.getcomptype()
-        self.num_frames = self._file_h.getnframes()
         assert self.compression_type == 'NONE'
+        self.num_frames = self._file_h.getnframes()
+        self.start_frame = min(int(start_offset * self.frame_rate), self.num_frames-1)
+        if end_offset > 0.0:
+            self.end_frame = min(int(end_offset * self.frame_rate), self.num_frames-1)
+        else:
+            # 0.0 is a special value for `end_offset` that means no right-bound, so it's end-of-file.
+            self.end_frame = self.num_frames - 1
+        self.frames_remaining = self.end_frame - self.start_frame
 
-        if offset > 0.0:
-            self._file_h.setpos(self.wave_position_from_offset(offset))
+        self._log_event_queue.log(
+            LogLevel.INFO, "Starting {0} from frame {1} out of {2} frames".format(
+                self.filename, self.start_frame, self.num_frames))
+
+        self._file_h.setpos(self.start_frame)
 
     def read(self, buffer: memoryview) -> int:
         """
         Read callback function
         """
         size = buffer.nbytes
-        frames = self._file_h.readframes(size // self.sample_width)
-
-        buffer[:len(frames)] = frames
-
-        return len(frames)
+        if self.frames_remaining <= 0:
+            return 0
+        frames_to_read = min(self.frames_remaining, size // self.sample_width)
+        next_bytes = self._file_h.readframes(frames_to_read)
+        frames_read = int(len(next_bytes) / self.sample_width)
+        self.frames_remaining -= frames_read
+        buffer[:len(next_bytes)] = next_bytes
+        return len(next_bytes)
 
     def close(self):
         """
@@ -251,11 +271,3 @@ class WavFileReaderCallback(speechsdk.audio.PullAudioInputStreamCallback):
             bits_per_sample=self.sample_width*8,
             channels=self.num_channels
         )
-
-    def wave_position_from_offset(self, offset: float) -> int:
-        wave_units_per_second = self.frame_rate
-        start_frame = int(offset * wave_units_per_second)
-        self._log_event_queue.log(
-            LogLevel.INFO, "Restarting {0} from frame {1} out of {2} frames".format(
-                self.filename, start_frame, self.num_frames))
-        return start_frame
