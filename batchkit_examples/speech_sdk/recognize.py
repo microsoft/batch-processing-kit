@@ -362,7 +362,7 @@ class FileRecognizer:
                 audio_file_basename, start_offset_secs))
             callback = WavFileReaderCallback(
                 filename=converted_audio_file,
-                offset=start_offset_secs,  # in seconds
+                start_offset=start_offset_secs,  # in seconds
                 log_event_queue=self._log_event_queue
             )
             stream = speechsdk.audio.PullAudioInputStream(callback, callback.audio_format())
