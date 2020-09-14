@@ -63,7 +63,7 @@ sample = os.path.join(
     test_root,
     'resources/whatstheweatherlike.wav'
 )
-audio_duration = batchkit_examples.speech_sdk.audio.check_audio_file(sample)
+audio_duration = batchkit_examples.speech_sdk.audio.check_wav_file(sample)
 
 # Read some json that we can produce for each segment final result (recognized event).
 sample_segment = os.path.join(
@@ -84,7 +84,7 @@ def check_server(*args, **kwargs):
     return True
 
 
-check_audio_file_original = batchkit_examples.speech_sdk.audio.check_audio_file
+check_audio_file_original = batchkit_examples.speech_sdk.audio.check_wav_file
 
 
 def check_audio_file(*args):
@@ -265,7 +265,7 @@ class UnstableSDKTestCase(object):
                             _contrived_audio_files_oneshot_fn = partial(contrived_audio_files_oneshot, NUM_AUDIO_FILES,
                                                                         tempdir_in)
                             batchkit.client.get_input_files = _contrived_audio_files_oneshot_fn
-                            batchkit_examples.speech_sdk.audio.check_audio_file = check_audio_file
+                            batchkit_examples.speech_sdk.audio.check_wav_file = check_audio_file
                         else:
                             _contrived_audio_files_daemon_init = contrived_audio_files_daemon_init(
                                 NUM_AUDIO_FILES, tempdir_in)
@@ -278,7 +278,7 @@ class UnstableSDKTestCase(object):
 
                             # Actual implementations.
                             batchkit.client.get_input_files = utils.get_input_files
-                            batchkit_examples.speech_sdk.audio.check_audio_file = check_audio_file_original
+                            batchkit_examples.speech_sdk.audio.check_wav_file = check_audio_file_original
 
                         # Reflect on batch-client src root directory.
                         root = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..')

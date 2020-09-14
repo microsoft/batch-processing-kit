@@ -2,7 +2,7 @@
 
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-
+import json
 import sys
 import os
 import glob
@@ -12,12 +12,110 @@ from typing import List
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../..'))
 
 from batchkit import client
+from batchkit.utils import create_dir, write_json_file_atomic
 from batchkit_examples.speech_sdk.parser import parse_cmdline
 from batchkit_examples.speech_sdk.batch_config import SpeechSDKBatchConfig
+from batchkit_examples.speech_sdk.lang_id.batch_config import LangIdBatchConfig
 
 
 # Main entry point
 if __name__ == '__main__':
     args: Namespace = parse_cmdline()
-    client.run(args, SpeechSDKBatchConfig)
+
+    # Single-language.
+    if len(args.language) == 1:
+        args.language = args.language[0]
+        client.run(args, SpeechSDKBatchConfig)
+
+    # Multi-language.
+    else:
+        # Re-wire inputs, outputs, scratch, and logs for each stage.
+        lid_input = args.input_folder
+        lid_scratch = os.path.join(args.scratch_folder, "lid")
+        lid_output = os.path.join(args.output_folder, "lid")
+        lid_logs = os.path.join(args.log_folder, "lid") if args.log_folder else None
+
+        transcription_input = lid_output
+        transcription_scratch = os.path.join(args.scratch_folder, "single_lang_sr")
+        transcription_output = os.path.join(args.output_folder, "single_lang_sr")
+        transcription_logs = os.path.join(args.log_folder, "single_lang_sr") if args.log_folder else None
+
+        merge_input = transcription_output
+        merge_output = args.output_folder
+
+        # First do language segmentation.
+        assert(isinstance(args.language, List))
+        args.input_folder = lid_input
+        args.scratch_folder = lid_scratch
+        args.output_folder = lid_output
+        args.log_folder = lid_logs
+        client.run(args, LangIdBatchConfig)
+
+        # Second, do transcription for each language, one at a time.
+        langs = args.language
+        create_dir(transcription_scratch)
+        for lang in langs:
+            manifest = os.path.join(transcription_scratch, lang + "_file_manifest")
+            print("wrote " + manifest)
+            with open(manifest, "w") as m:
+                suffix = lang.lower()+".seg.json"
+                segs = [f+"\n" for f in os.listdir(transcription_input) if f.lower().endswith(suffix)]
+                m.writelines(segs)
+
+            args.language = lang
+            args.input_list = manifest
+            args.input_folder = transcription_input
+            args.scratch_folder = transcription_scratch
+            args.output_folder = transcription_output
+            args.logs_folder = os.path.join(transcription_logs, lang)
+            client.run(args, SpeechSDKBatchConfig)
+
+        # Third, stitch all the results together.
+        all_segments = [f for f in os.listdir(transcription_output) if f.endswith(".seg.json")]
+        all_originals = set([f.split('.')[0] for f in all_segments])
+        for original in all_originals:
+            segments = [s for s in all_segments if s.startswith(original)]
+            segments.sort(key=lambda s: int(s.split('.')[-4]))
+            file_hash = 0
+            audio_duration = 0.0
+            last_processed_offset = 0.0
+            display = []
+            itn = []
+            lexical = []
+            maskeditn = []
+            segment_results = []
+            for segment in segments:
+                segment_path = os.path.join(transcription_output, segment)
+                with open(segment_path) as sj:
+                    segment_json = json.load(sj)
+                    segment_json = segment_json['AudioFileResults'][0]
+                file_hash = segment_json['AudioFileHash']
+                audio_duration = segment_json['AudioLengthInSeconds']
+                for cr in segment_json['CombinedResults']:
+                    display.append(cr['Display'])
+                    itn.append(cr['ITN'])
+                    lexical.append(cr['Lexical'])
+                    maskeditn.append(cr['MaskedITN'])
+                segment_results.append(segment_json['SegmentResults'])
+                last_processed_offset = segment_json['LastProcessedOffsetInSeconds']
+            combined_json = {
+                'AudioFileHash': file_hash,
+                'AudioFileName': original,
+                'AudioFileUrl': os.path.join(lid_input, original),
+                'AudioLengthInSeconds': audio_duration,
+                'CombinedResults': {
+                    'ChannelNumber': None,
+                    'Display': " ".join(display),
+                    'ITN': " ".join(itn),
+                    'Lexical': " ".join(lexical),
+                    'MaskedITN': " ".join(maskeditn),
+                },
+                'LastProcessedOffsetInSeconds': last_processed_offset,
+                'SegmentResults': segment_results,
+                'TranscriptionStatus': 'Succeeded',
+            }
+            outfile = os.path.join(merge_output, original+".json")
+            write_json_file_atomic({'AudioFileResults':[combined_json]}, outfile)
+
+>>>>>>> Alpha E2E golden.
     exit(0)
