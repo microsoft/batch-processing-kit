@@ -3,7 +3,7 @@
 
 from batchkit.logger import LogEventQueue
 from batchkit.endpoint_status import EndpointStatusChecker
-from build.lib.batchkit_examples.speech_sdk.endpoint_status import SpeechSDKEndpointStatusChecker
+from batchkit_examples.speech_sdk.endpoint_status import SpeechSDKEndpointStatusChecker
 
 
 class LangIdEndpointStatusChecker(SpeechSDKEndpointStatusChecker):

@@ -2,6 +2,7 @@
 # Licensed under the MIT License.
 
 from typing import List
+import json
 
 from batchkit.batch_request import BatchRequest
 from batchkit.logger import LogEventQueue
@@ -11,7 +12,7 @@ from batchkit_examples.speech_sdk.batch_config import SpeechSDKBatchConfig
 from batchkit_examples.speech_sdk.endpoint_status import SpeechSDKEndpointStatusChecker
 from batchkit_examples.speech_sdk.run_summarizer import SpeechSDKBatchRunSummarizer
 from batchkit_examples.speech_sdk.work_item import SpeechSDKWorkItemRequest
-from . import audio
+import batchkit_examples.speech_sdk.audio as audio
 
 
 class SpeechSDKBatchRequest(BatchRequest):
@@ -88,4 +89,6 @@ class SpeechSDKBatchRequest(BatchRequest):
 
     @staticmethod
     def is_valid_input_file(file: str) -> bool:
-        return audio.is_valid_audio_file(file)
+        # A valid input file for a work item is either an audio file or a language segment file pointing to an
+        # audio file with start/end offsets and language.
+        return audio.is_valid_audio_file(file) or file.endswith(".seg.json")

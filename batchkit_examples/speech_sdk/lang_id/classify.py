@@ -17,7 +17,7 @@ from collections import defaultdict
 
 from batchkit.logger import LogEventQueue, LogLevel
 from batchkit.utils import sha256_checksum, write_json_file_atomic, \
-    EndpointDownError, FailedRecognitionError, tee_to_pipe_decorator, CancellationTokenException
+    EndpointDownError, FailedRecognitionError, tee_to_pipe_decorator, CancellationTokenException, create_dir
 from batchkit.constants import RECOGNIZER_SCOPE_RETRIES
 from batchkit_examples.speech_sdk.audio import init_gstreamer, convert_audio, WavFileReaderCallback
 from .work_item import LangIdWorkItemRequest, LangIdWorkItemResult
@@ -28,7 +28,11 @@ import azure.cognitiveservices.speech as speechsdk
 
 # Time unit for the Speech SDK
 TIME_UNIT: float = 10000000.0
+
 LID_URL_BASE = "<base>/speech/languagedetection/cognitiveservices/v1"
+
+# File marked failed after this many successive segment classification failures.
+MAX_CONSECUTIVE_LID_REQUEST_FAILURES = 5
 
 
 def classify_file_retry(run_classifier_function):
@@ -76,7 +80,7 @@ def run_classifier(request: LangIdWorkItemRequest, rtf: float,
     :return: an instance of LangIdWorkItemResult.
     """
     file_recognizer = FileRecognizer(request, rtf, endpoint_config, log_event_queue)
-    return file_recognizer.recognize(cancellation_token)
+    return file_recognizer.classify(cancellation_token)
 
 
 class FileRecognizer:
@@ -107,6 +111,9 @@ class FileRecognizer:
         self._audio_duration: Optional[float] = None
         self._converted_audio_file: Optional[str] = None
 
+        self._lid_request_consecutive_failures = 0
+        self._last_lid_request_err: Optional[str] = None
+
     def classify(self, cancellation_token: multiprocessing.Event) -> LangIdWorkItemResult:
         """
         Wrapper that ensures that result is reliably produced or else total accounting for why not.
@@ -135,7 +142,7 @@ class FileRecognizer:
             # If we did not pick up a 100% successful cached result, then we need to do a call to the classifier,
             # but if we were partially successful, we can at least pick up from where we left off.
             if not completely_cached:
-                audio_duration = self.__recognize_in_subproc(self.request.filepath, start_offset, cancellation_token)
+                audio_duration = self.__recognize_in_subproc(start_offset, cancellation_token)
 
             if start_offset > 0.0:
                 # Partial or total cache hit, but we need to make sure the results exists where they're expected.
@@ -173,7 +180,7 @@ class FileRecognizer:
             failed_reason,
         )
 
-    def __recognize_in_subproc(self, audio_file, json_data, cancellation_token: multiprocessing.Event):
+    def __recognize_in_subproc(self, start_offset: float, cancellation_token: multiprocessing.Event):
         """
         Invoke the Speech SDK in a subprocess to do continuous language segmentation on an audio file.
         This provides per-request process isolation to prevent unexpected terminal faults upstream.
@@ -191,8 +198,8 @@ class FileRecognizer:
         # Use pipe to receive pickled exceptions from child.
         parent_conn, child_conn = multiprocessing.Pipe()
         work_proc = multiprocessing.Process(
-            target=tee_to_pipe_decorator(FileRecognizer.__recognize, child_conn, pipe_void=True),
-            args=(self, audio_file, json_data, cancellation_token),
+            target=tee_to_pipe_decorator(FileRecognizer.__classify, child_conn, pipe_void=True),
+            args=(self, start_offset, cancellation_token),
             daemon=True,
         )
         work_proc.name = current_process().name + "__LangIdRequestChildProc"
@@ -221,7 +228,7 @@ class FileRecognizer:
             err_msg = err_msg.format(
                             signum,
                             work_proc.name,
-                            audio_file,
+                            self.request.filepath,
                             self._host,
                             current_process().name
                       )
@@ -242,11 +249,9 @@ class FileRecognizer:
                 assert type(obj) == float
                 return obj
 
-    def __classify(self, audio_file, start_offset_secs, cancellation_token) -> float:
+    def __classify(self, start_offset_secs, cancellation_token) -> float:
         """
         Use Microsoft Speech SDK to do continuous language segmentation on a single WAV file
-        :param audio_file: original audio file to recognize
-        :param json_data: any result from a previous run of this file even if it was a failed transcription
         :param cancellation_token multiprocessing.Event: to signal early exit.
         :returns: If all went well, just an int containing the audio duration.
                   The results would already be written as files in that case.
@@ -254,26 +259,86 @@ class FileRecognizer:
         # Fail fast if work item has already been cancelled.
         if cancellation_token.is_set():
             msg = "Canceled {0} on process {1} targeting {2} by cancellation token (before start).".format(
-                audio_file, current_process().name, self._host
+                self.request.filepath, current_process().name, self._host
             )
             self._log_event_queue.log(LogLevel.INFO, msg)
             raise CancellationTokenException(msg)
 
+        start_time = time.time()
         is_success = True
-        failing_seg_error_details = None
-        failing_seg_cancel_msg = None
 
         init_gstreamer()
-        converted_audio_file, audio_duration = convert_audio(audio_file, self._log_event_queue)
-        assert audio_duration is not None
+        self._converted_audio_file, self._audio_duration = convert_audio(self.request.filepath, self._log_event_queue)
+        assert self._converted_audio_file is not None
 
+        try:
+            lang_segments = self.__connect_contiguous_segments(
+                self.__continuous_lid_rolling_with_voting(cancellation_token))
+        except:
+            # While processing we could get a FailedRecognitionError, CancellationTokenException,
+            # or other unexpected exceptions. Upstream decides whether to retry, but we need to at least
+            # clean up before we bubble up the exception.
+            if os.path.abspath(self.request.filepath) != os.path.abspath(self._converted_audio_file):
+                os.remove(self._converted_audio_file)
+            self._log_event_queue.warning(
+                "A language segmentation attempt of file: {0} against endpoint: {1} on process: {2} has failed.".format(
+                    self.request.filepath, self._host, current_process().name))
+            raise
 
-        def __single_segment_lid_request(start_offset: float = 0, end_offset: float = 0) -> str:
+        end_time = time.time()
+        self._log_event_queue.info("Finished language segmentation on file: {0} -- {1}; wall time taken: {2}s".format(
+            self.request.filepath,
+            "PASS" if is_success else "FAIL",
+            end_time - start_time
+        ))
+
+        # Write out the language segment files.
+        base, _ = os.path.splitext(os.path.basename(self.request.filepath))
+        for segno in range(len(lang_segments)):
+            segment = lang_segments[segno]
+            seg_filepath = os.path.join(
+                self.request.output_dir, "{0}.{1}.{2}.seg.json".format(base, segno, segment[0]))
+            segment.append(seg_filepath)
+            write_json_file_atomic(
+                {
+                    "file": self.request.filepath,
+                    "language": segment[0],
+                    "start_offset": segment[1],
+                    "end_offset": segment[2]
+                },
+                seg_filepath,
+                log=False,
+            )
+            self._log_event_queue.info("Atomically wrote file {0}".format(seg_filepath))
+
+        # Summarization file useful for debugging.
+        seg_summ_file = os.path.join(self.request.output_dir, base+".lang_segments.json")
+        write_json_file_atomic(
+            lang_segments,
+            seg_summ_file,
+            log=False,
+
+        )
+        self._log_event_queue.info("Atomically wrote file {0}".format(seg_summ_file))
+        return self._audio_duration
+
+    def __single_segment_lid_request(self,
+                                     start_offset: float = 0.0,
+                                     end_offset: float = 0.0) -> str:
+        """
+        :returns: If the language could not be detected but this was due to signal or model insufficiency, the
+                  detected_language is returned as 'unknown'. Any error from the LID container or due to the
+                  Speech SDK either resolves on a retry or until the max retries are hit in which case a
+                  FailedRecognitionError is thrown.
+        """
+        while self._lid_request_consecutive_failures < MAX_CONSECUTIVE_LID_REQUEST_FAILURES:
+
             if start_offset == 0 and end_offset == 0:
                 audio_config = speechsdk.audio.AudioConfig(filename=self._converted_audio_file)
             else:
-                callback = LidWavFileReaderCallback(
+                callback = WavFileReaderCallback(
                     filename=self._converted_audio_file,
+                    log_event_queue=self._log_event_queue,
                     start_offset=start_offset,  # in seconds
                     end_offset=end_offset,
                 )
@@ -310,7 +375,7 @@ class FileRecognizer:
             )
 
             # Add logs for debugging.
-            audio_file_basename = os.path.basename(audio_file)
+            audio_file_basename = os.path.basename(self.request.filepath)
             if self.request.log_dir is not None:
                 base, ext = os.path.splitext(audio_file_basename)
                 log_filename = "{0}.{1}.sdk.langid.log".format(os.path.join(base + "_" + ext[1:]),
@@ -324,7 +389,6 @@ class FileRecognizer:
                 speech_config=sdk_config,
                 audio_config=audio_config
             )
-
             result = recognizer.recognize_once()
 
             # On successful classification.
@@ -334,6 +398,8 @@ class FileRecognizer:
                 self._log_event_queue.debug(
                     "SEGMENT CLASSIFIED: File: {0}  start_offset: {1}  end_offset: {2}  "
                     "  Detected Lang: {3}".format(self._converted_audio_file, start_offset, end_offset, detected_lang))
+                self._lid_request_consecutive_failures = 0
+                self._last_lid_request_err = None
                 return detected_lang
 
             # Unexpected cancellation by the server (or less likely, by the sdk).
@@ -345,103 +411,24 @@ class FileRecognizer:
                 if cancellation_details.reason == speechsdk.CancellationReason.Error:
                     self._log_event_queue.error(
                         "Cancellation Reason was an Error: {0}".format(cancellation_details.error_details))
-                return "unknown"
+                self._lid_request_consecutive_failures += 1
+                self._last_lid_request_err = cancellation_details.error_details
 
             # Else something else went wrong that we are unfamiliar with.
-            self._log_event_queue.error(
-                "SEGMENT RESULT HAS UNEXPECTED REASON: File: {0}  start_offset: {1}  end_offset: {2}  "
-                "Endpoint: {3}  Reason code: {4}  Result object: {5}".format(
-                    self._converted_audio_file, start_offset, end_offset, self._host, result.reason, result.__repr__()))
-            return "unknown"
+            else:
+                err_str = "{0} {1}".format(result.reason, result.__repr__())
+                self._log_event_queue.error(
+                    "SEGMENT RESULT HAS UNEXPECTED REASON: File: {0}  start_offset: {1}  end_offset: {2}  "
+                    "Endpoint: {3}  Reason code: {4}  Result object: {5}".format(
+                        self._converted_audio_file, start_offset, end_offset, self._host, result.reason, result.__repr__()))
+                self._lid_request_consecutive_failures += 1
+                self._last_lid_request_err = err_str
 
+        # Retries hit the max. This is expected to be a very rare path, so we throw.
+        raise FailedRecognitionError("Too many max consecutive LID request failures ({0}). Last error: {1}".format(
+            MAX_CONSECUTIVE_LID_REQUEST_FAILURES, self._last_lid_request_err))
 
-
-
-
-
-
-
-
-
-
-
-
-        # If fail during the sequence of segments, do something like:
-        # self._log_event_queue.error("ERROR during language segment classification on file:
-        # {0}, start_offset: {1}, end_offset: {2}, details: {3}".format(audio_file, error_details))
-
-        # During the sequence, have to check if the cancellation token gets toggled.
-        if cancellation_token.is_set():
-            cancel_msg = "Canceled during language segmentation on file: {0} on process {1} " \
-                         "targeting {2} by cancellation token (in middle).".format(
-                            audio_file, current_process().name, self._host)
-            self._log_event_queue.info(cancel_msg)
-
-
-
-        # After each language segment, log:
-        self._log_event_queue.debug(
-            "RECOGNIZED language for file: {0} start_offset: {1} end_offset: {2} "
-            "sent by endpoint: {3} handled by process: {4}".format(
-                audio_file_basename, start_offset, end_offset, self._host, current_process().name
-            )
-        )
-
-
-        start_time = time.time()
-
-
-        # Wait for the done event to be set, but check if it's because cancellation was triggered.
-        if cancellation_token.is_set():
-            raise CancellationTokenException(cancel_msg)
-        end_time = time.time()
-
-
-
-        self._log_event_queue.log(LogLevel.INFO, "Finished recognizing {0} -- {1}; recognition time: {2}s".format(
-            audio_file_basename,
-            "PASS" if is_success else "FAIL",
-            end_time - start_time
-        ))
-
-        # AudioFileHash and AudioLengthInSeconds are added to support idempotent cached runs
-        final_json = \
-            {
-                "AudioFileName": audio_file_basename,
-                "AudioFileUrl": audio_file,
-                "AudioFileHash": sha256_checksum(audio_file),
-                "AudioLengthInSeconds": audio_duration,
-                "TranscriptionStatus": "Succeeded" if is_success else "Failed",
-                "SegmentResults": segment_results,
-                "CombinedResults": combined_results,
-                "LastProcessedOffsetInSeconds": last_processed_offset_secs,
-            }
-
-        # Emplace the segment results and combined result into the `final_json`.
-        # This also has the side effect of fixing the offsets if start_offset_secs was not zero.
-        self.populate_json_results(final_json, json_result_list, start_offset_secs)
-
-        # Write json output irrespective of whether the recognition was successful; also make it atomic
-        # in case this work item has a duplicate.
-        write_json_file_atomic(
-            {"AudioFileResults": [final_json]},
-            json_file,
-            log=False
-        )
-        self._log_event_queue.log(LogLevel.INFO, "Atomically wrote file {0}".format(json_file))
-
-        if not is_success:
-            self._log_event_queue.log(LogLevel.WARNING,
-                                      "Target {0} on process {1} failed 1 time.".format(
-                                          self._host, current_process().name))
-            raise FailedRecognitionError(error_details)
-
-        if os.path.abspath(audio_file) != os.path.abspath(converted_audio_file):
-            os.remove(converted_audio_file)
-
-        return audio_duration
-
-    def __cont_lid_rolling(self):
+    def __continuous_lid_rolling(self, cancellation_token: multiprocessing.Event):
         results = []
         # Constants. These might be too difficult to explain to users but consider making these user-settable params
         # so that users can make their own trade-off between language cross-over precision and compute intensity.
@@ -451,8 +438,19 @@ class FileRecognizer:
         time = 0.0
         last_detected = None
         last_detailed = False
-        while time + window < lang_segments[-1][2]:
-            detected = __single_segment_lid_request(example_file, start_offset=time, end_offset=time + window)
+        while time + window < self._audio_duration:
+
+            # Check for cancellation reasonably often..
+            if cancellation_token.is_set():
+                msg = "Canceled during language segmentation on file: {0} on process {1} " \
+                      "targeting {2} by cancellation token (in middle).".format(
+                        self.request.filepath, current_process().name, self._host
+                )
+                self._log_event_queue.info(msg)
+                raise CancellationTokenException(msg)
+
+            # Classify language for this window.
+            detected = self.__single_segment_lid_request(start_offset=time, end_offset=time + window)
             results.append([detected, time, time + window])
 
             # Detection of language cross-over..
@@ -461,15 +459,13 @@ class FileRecognizer:
                 if not last_detailed:
                     time_ = time - stride + trans_stride
                     while time_ < time:
-                        detected_ = __single_segment_lid_request(example_file, start_offset=time_,
-                                                                 end_offset=time_ + window)
+                        detected_ = self.__single_segment_lid_request(start_offset=time_, end_offset=time_ + window)
                         results.append([detected_, time_, time_ + window])
                         time_ += trans_stride
                 # Additional detailing past this time.
                 time_ = time + trans_stride
-                while time_ + window < lang_segments[-1][2] and time_ < time + stride:
-                    detected_ = __single_segment_lid_request(example_file, start_offset=time_,
-                                                             end_offset=time_ + window)
+                while time_ + window < self._audio_duration and time_ < time + stride:
+                    detected_ = self.__single_segment_lid_request(start_offset=time_, end_offset=time_ + window)
                     results.append([detected_, time_, time_ + window])
                     time_ += trans_stride
                 last_detailed = True
@@ -481,6 +477,73 @@ class FileRecognizer:
             last_detected = detected
             time += stride
         return results
+
+    def __continuous_lid_rolling_with_voting(self, cancellation_token: multiprocessing.Event):
+        results = self.__continuous_lid_rolling(cancellation_token)
+        # These are the votes for a given second t representing [t, t+1.0)
+        votes_by_time = defaultdict(lambda: defaultdict(int))
+        # This is the max vote for a given second t representing [t, t+1.0)
+        maxvote_by_time = defaultdict(lambda: "unknown")
+        results_voted = []
+        max_time_voted = 0  # representing [time, time+1.0) for which we have any vote
+        # Do voting. Make a vote for each 1.0 second of audio.
+        for result in results:
+            lang = result[0]
+            start = int(round(result[1]))
+            end = int(round(result[2])) - 1  # inclusive
+            max_time_voted = max(max_time_voted, end)
+            for t in range(start, end + 1, 1):
+                votes_by_time[t][lang] += 1
+
+        # Get the max votes at every second.
+        first_known_lang = "unknown"
+        for t in range(0, max_time_voted + 1):
+            max_lang = "unknown"
+            max_votes = 0
+            for lang, num_votes in votes_by_time[t].items():
+                if lang != "unknown" and num_votes > max_votes:
+                    max_lang = lang
+                    max_votes = num_votes
+            maxvote_by_time[t] = max_lang
+            if first_known_lang == "unknown":
+                first_known_lang = max_lang
+
+        # Finally, put together contiguous sequences and remove 'unknown'. The default policy for 'unknown' vote
+        # is to re-use the last known maxvote in time. If the audio starts unknown, then we use the
+        # first known language seen.
+        last_known_lang = first_known_lang
+        current_start = 0
+        last_sec_incl = int(self._audio_duration)
+        for t in range(1, last_sec_incl + 1):
+            current_lang = maxvote_by_time[t]
+            last_lang = maxvote_by_time[t - 1]
+            if current_lang != last_lang:
+                results_voted.append([last_lang if last_lang != 'unknown' else last_known_lang, current_start, t])
+                current_start = t
+            if current_lang != "unknown":
+                last_known_lang = current_lang
+        # Final language segment
+        last_lang = maxvote_by_time[last_sec_incl]
+        results_voted.append(
+            [last_lang if last_lang != 'unknown' else last_known_lang, current_start, last_sec_incl + 1])
+        return results_voted
+
+    def __connect_contiguous_segments(self, segments):
+        if len(segments) == 0:
+            return segments
+        segments = copy.deepcopy(segments)
+        sorted(segments, key=lambda seg: seg[1], reverse=False)
+        on_idx = 0
+        for next_seg in segments[1:]:
+            if segments[on_idx][0] == next_seg[0] and segments[on_idx][2] == next_seg[1]:
+                segments[on_idx][2] = next_seg[2]
+            else:
+                on_idx += 1
+                segments[on_idx] = next_seg
+        # on_idx is the last one inclusive
+        if on_idx < len(segments) - 1:
+            del segments[on_idx + 1:]
+        return segments
 
     def __lid_url_for_candidate_langs(self) -> str:
         url = LID_URL_BASE.replace("<base>", self._host) + '?'

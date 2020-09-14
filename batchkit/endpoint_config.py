@@ -42,7 +42,7 @@ endpoint_schema = {
         "type": "float",
         "default": 3.0,
         "min": 0.1,
-        "max": 5.0
+        "max": 7.0
     },
     "subscription": {
         "type": "string",
@@ -52,7 +52,8 @@ endpoint_schema = {
     "language": {
         "type": "string",
         "default": "en-US",
-        "allowed": ["ar-BH",
+        "allowed": ["lid",
+                    "ar-BH",
                     "ar-EG",
                     "ar-SA",
                     "ar-SY",
@@ -84,7 +85,8 @@ endpoint_schema = {
                     "th-TH",
                     "zh-HK",
                     "zh-CN",
-                    "zh-TW"]
+                    "zh-TW",
+                    ]
 
     },
     "startConcurrency": {
