@@ -239,8 +239,7 @@ class WavFileReaderCallback(speechsdk.audio.PullAudioInputStreamCallback):
             self.end_frame = self.num_frames - 1
         self.frames_remaining = self.end_frame - self.start_frame
 
-        self._log_event_queue.log(
-            LogLevel.INFO, "Starting {0} from frame {1} out of {2} frames".format(
+        self._log_event_queue.debug("Starting {0} from frame {1} out of {2} frames".format(
                 self.filename, self.start_frame, self.num_frames))
 
         self._file_h.setpos(self.start_frame)
