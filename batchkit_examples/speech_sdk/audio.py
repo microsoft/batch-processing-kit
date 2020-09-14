@@ -128,11 +128,11 @@ def convert_audio(audio_file, leq: LogEventQueue):
         raise InvalidAudioFormatError("Invalid source audio format {0} for file {1}".format(
             ext[1:], audio_file))
 
-    audio_duration = check_audio_file(converted_file)
+    audio_duration = check_wav_file(converted_file)
     return converted_file, audio_duration
 
 
-def check_audio_file(audio_file):
+def check_wav_file(audio_file):
     """
     Check if the audio file contents and format match the needs of the speech service. Currently we only support
     16 KHz, 16 bit, MONO, PCM audio format. All others will be rejected.
@@ -204,8 +204,7 @@ class WavFileReaderCallback(speechsdk.audio.PullAudioInputStreamCallback):
             self.end_frame = self.num_frames - 1
         self.frames_remaining = self.end_frame - self.start_frame
 
-        self._log_event_queue.log(
-            LogLevel.INFO, "Starting {0} from frame {1} out of {2} frames".format(
+        self._log_event_queue.debug("Starting {0} from frame {1} out of {2} frames".format(
                 self.filename, self.start_frame, self.num_frames))
 
         self._file_h.setpos(self.start_frame)

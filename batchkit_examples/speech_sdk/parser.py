@@ -88,8 +88,14 @@ def create_parser():
         help="diarization mode selection"
     )
     parser.add_argument(
-        '-language', '--language',
-        default='en-US', help="language selection"
+        '-language', '--language', nargs='+', default="en-US",
+        help="Space-separated list of candidate languages for transcription.\n"
+             "   Example:  --language en-US  \n"
+             "   Example:  --language en-US fr-FR de-DE  \n"
+             "If exactly one language is provided, no language segmentation is performed and you do not need "
+             "Language Identification (LID) endpoints in your config. With two or more languages, you must have at "
+             "least one LID endpoint listed in your config available for multi-language segmentation to run first. "
+             "Each LID endpoint should be marked with language 'lid' in the endpoint config."
     )
     parser.add_argument(
         '-strict_config', '--strict-configuration-validation',
@@ -130,5 +136,11 @@ def parse_cmdline(args=None) -> Namespace:
 
     if args.scratch_folder is None:
         args.scratch_folder = tempfile.mkdtemp()
+
+    if isinstance(args.language, str):
+        args.language = [args.language]
+
+    if isinstance(args.language, list) and args.run_mode != 'ONESHOT':
+        parser.error("Multi-language speech-batch-kit can only be used in ONESHOT mode in this version.")
 
     return args

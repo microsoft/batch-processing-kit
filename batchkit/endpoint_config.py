@@ -42,7 +42,7 @@ endpoint_schema = {
         "type": "float",
         "default": 3.0,
         "min": 0.1,
-        "max": 5.0
+        "max": 7.0
     },
     "subscription": {
         "type": "string",
@@ -59,7 +59,7 @@ endpoint_schema = {
                     "es-PY", "es-SV", "es-US", "es-UY", "es-VE", "et-EE", "fi-FI", "fr-CA", "fr-FR", "ga-IE", "gu-IN",
                     "hi-IN", "hr-HR", "hu-HU", "it-IT", "ja-JP", "ko-KR", "lt-LT", "lv-LV", "mr-IN", "mt-MT", "nb-NO",
                     "nl-NL", "pl-PL", "pt-BR", "pt-PT", "ro-RO", "ru-RU", "sk-SK", "sl-SI", "sv-SE", "ta-IN", "te-IN",
-                    "th-TH", "tr-TR", "zh-CN", "zh-HK", "zh-TW"],
+                    "th-TH", "tr-TR", "zh-CN", "zh-HK", "zh-TW", "lid"],
     },
     "startConcurrency": {
         "type": "integer",
