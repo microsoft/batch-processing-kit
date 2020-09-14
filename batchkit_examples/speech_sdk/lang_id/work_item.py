@@ -21,7 +21,7 @@ class LangIdWorkItemRequest(WorkItemRequest):
                                   located if the file has been processed before.
         :param log_dir: where per-worker-request SpeechSDK logs will be placed for LID requests
         """
-        super().__init__(filepath, None)
+        super().__init__(filepath, 'lid')
         self.candidate_languages: List[str] = candidate_languages
         self.cache_search_dirs: List[str] = cache_search_dirs
         self.output_dir: str = output_dir

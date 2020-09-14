@@ -268,18 +268,32 @@ class FileRecognizer:
         error_details = None
         cancel_msg = None
 
+        if audio_file.endswith(".seg.json"):
+            with open(audio_file) as f:
+                meta = json.load(f)
+                actual_audio_file = meta["file"]
+                start_offset_secs = float(meta["start_offset"])
+                end_offset_secs = float(meta["end_offset"])
+        else:
+            actual_audio_file = audio_file
+            start_offset_secs = 0.0
+            end_offset_secs = 0.0  # special value means EOF
+
         init_gstreamer()
-        converted_audio_file, audio_duration = convert_audio(audio_file, self._log_event_queue)
+        converted_audio_file, audio_duration = convert_audio(actual_audio_file, self._log_event_queue)
         assert audio_duration is not None
 
+        segment_results = list()
+        combined_results = list()
         if self._allow_resume and json_data is not None:
-            start_offset_secs = json_data.get("LastProcessedOffsetInSeconds", 0.0)
+            start_offset_secs_resumed = json_data.get("LastProcessedOffsetInSeconds", start_offset_secs)
+            # It should never happen that the partially cached result goes up to an offset before start_offset_secs.
+            assert(start_offset_secs_resumed >= start_offset_secs)
+            start_offset_secs = start_offset_secs_resumed
+            self._log_event_queue.info("RESUMING file {0} from offset {1} seconds".format(
+                audio_file, start_offset_secs))
             segment_results = json_data.get("SegmentResults", list())
             combined_results = json_data.get("CombinedResults", list())
-        else:
-            start_offset_secs = 0.0
-            segment_results = list()
-            combined_results = list()
         last_processed_offset_secs: float = start_offset_secs
 
         # @TODO: Confining module import to here limits terminal process fault risk to only the process
@@ -354,21 +368,20 @@ class FileRecognizer:
         # Make the buffers larger than default.
         speech_config.set_property_by_name("SPEECH-MaxBufferSizeSeconds", "1800")
 
+        audio_file_basename = os.path.basename(audio_file)
         if self._log_folder is not None:
-            audio_file_basename = os.path.basename(audio_file)
             base, ext = os.path.splitext(audio_file_basename)
             log_filename = "{0}.{1}.sdk.log".format(os.path.join(base + "_" + ext[1:]), current_process().name)
             output_file_log = os.path.join(self._log_folder, log_filename)
             speech_config.set_property(speechsdk.PropertyId.Speech_LogFilename, output_file_log)
             speech_config.set_property_by_name("SPEECH-FileLogSizeMB", "10")
 
-        if self._allow_resume and start_offset_secs > 0.0:
-            self._log_event_queue.info("RESUMING file {0} from offset {1} seconds".format(
-                audio_file_basename, start_offset_secs))
+        if start_offset_secs > 0.0 or end_offset_secs != 0.0:
             callback = WavFileReaderCallback(
                 filename=converted_audio_file,
-                start_offset=start_offset_secs,  # in seconds
-                log_event_queue=self._log_event_queue
+                log_event_queue=self._log_event_queue,
+                start_offset=start_offset_secs,
+                end_offset=end_offset_secs,
             )
             stream = speechsdk.audio.PullAudioInputStream(callback, callback.audio_format())
             audio_config = speechsdk.audio.AudioConfig(stream=stream)
@@ -442,11 +455,17 @@ class FileRecognizer:
 
         # Wait for the done event to be set, but check if it's because cancellation was triggered.
         done_event.wait()
+        if os.path.abspath(actual_audio_file) != os.path.abspath(converted_audio_file):
+            os.remove(converted_audio_file)
         if cancellation_token.is_set():
             raise CancellationTokenException(cancel_msg)
         end_time = time.time()
 
-        audio_file_basename, json_file = get_input_output_file_names(audio_file, self._output_folder)
+        if audio_file.endswith(".seg.json"):
+            json_file = os.path.join(self._output_folder, audio_file_basename)
+        else:
+            _, json_file = get_input_output_file_names(audio_file, self._output_folder)
+
 
         self._log_event_queue.log(LogLevel.INFO, "Finished recognizing {0} -- {1}; recognition time: {2}s".format(
             audio_file_basename,
@@ -485,9 +504,6 @@ class FileRecognizer:
                                       "Target {0} on process {1} failed 1 time.".format(
                                           self._host, current_process().name))
             raise FailedRecognitionError(error_details)
-
-        if os.path.abspath(audio_file) != os.path.abspath(converted_audio_file):
-            os.remove(converted_audio_file)
 
         return audio_duration
 
