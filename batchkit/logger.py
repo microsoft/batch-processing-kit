@@ -201,7 +201,7 @@ def __listener_process_configure_logging(log_folder, console_log_level, file_log
 
     # Create formatter and add it to the handler
     formatter = logging.Formatter(
-        '%(asctime)s.%(msecs)03d:%(levelname)s:%(processName)s:%(message)s', '%Y-%m-%d %H:%M:%S')
+        u'%(asctime)s.%(msecs)03d:%(levelname)s:%(processName)s:%(message)s', '%Y-%m-%d %H:%M:%S')
     console_log.setFormatter(formatter)
 
     # Add the handler to the logger
@@ -223,7 +223,8 @@ def __listener_process_configure_logging(log_folder, console_log_level, file_log
             mode="a",
             maxBytes=50*1024*1024,
             backupCount=20,
-            delay=False
+            delay=False,
+            encoding="utf-8",
         )
         file_log.setLevel(file_log_level)
         file_log.setFormatter(formatter)
