@@ -67,7 +67,7 @@ if __name__ == '__main__':
             args.input_folder = transcription_input
             args.scratch_folder = transcription_scratch
             args.output_folder = transcription_output
-            args.logs_folder = os.path.join(transcription_logs, lang)
+            args.logs_folder = transcription_logs
             client.run(args, SpeechSDKBatchConfig)
 
         # Third, stitch all the results together.
@@ -86,7 +86,7 @@ if __name__ == '__main__':
             segment_results = []
             for segment in segments:
                 segment_path = os.path.join(transcription_output, segment)
-                with open(segment_path) as sj:
+                with open(segment_path, encoding="utf-8") as sj:
                     segment_json = json.load(sj)
                     segment_json = segment_json['AudioFileResults'][0]
                 file_hash = segment_json['AudioFileHash']
@@ -115,7 +115,7 @@ if __name__ == '__main__':
                 'TranscriptionStatus': 'Succeeded',
             }
             outfile = os.path.join(merge_output, original+".json")
-            write_json_file_atomic({'AudioFileResults':[combined_json]}, outfile)
+            write_json_file_atomic({'AudioFileResults': [combined_json]}, outfile)
 
 >>>>>>> Alpha E2E golden.
     exit(0)
