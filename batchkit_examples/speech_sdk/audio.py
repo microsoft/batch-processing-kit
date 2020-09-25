@@ -1,7 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+
 import gi
 import os
+from io import BufferedReader
 import tempfile
 import wave
 import azure.cognitiveservices.speech as speechsdk
@@ -117,6 +119,27 @@ def convert_audio(audio_file, leq: LogEventQueue):
                 ext = ".mulaw"
             elif str(e) == "unknown format: 6":
                 ext = ".alaw"
+            elif str(e) == "file does not start with RIFF id":
+                # The file is not a RIFF/WAV container.
+                # Check a few alternatives (grow this if necessary).
+                reader: BufferedReader
+                bites: bytes
+                with open(audio_file, 'rb') as reader:
+                    bites = reader.read(36)
+
+                # Ogg Container?
+                # Every Ogg page header has the Capture Pattern (magic number).
+                #          Ref: [https://en.wikipedia.org/wiki/Ogg#Page_structure]
+                if bites[0:4] == b'OggS':
+                    # Opus coding?
+                    #     Ogg Opus Format: RFC 7845 [https://tools.ietf.org/html/rfc7845]
+                    #     Section 3 (Packet Organization): page 0 of the Ogg bitstream
+                    #       will exclusively contain a single packet (thus single segment)
+                    #       that is the Opus Identification Header that uniquely
+                    #       identifies the stream as Opus audio.
+                    #     Section 5.1:  Identification Header starts with 'OpusHead' ascii
+                    if bites[28:36] == b'OpusHead':
+                        ext = ".opus"
 
     # Now convert the audio, if necessary
     if ext in conversion_extensions:
