@@ -556,6 +556,7 @@ class FileRecognizer:
             masked_itn = list()
             display = list()
             for json_result in json_result_list:
+                json_result["Language"] = self.request.language
                 json_result["ChannelNumber"] = None
                 if "NBest" in json_result:
                     nbest_list = json_result["NBest"]
