@@ -5,6 +5,7 @@
 import json
 import sys
 import os
+import glob
 from typing import List
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../..'))
@@ -26,6 +27,7 @@ if __name__ == '__main__':
         client.run(args, SpeechSDKBatchConfig)
 
     # Multi-language.
+    # This is Alpha proof-of-concept code and will not be factored like this here.
     else:
         # Re-wire inputs, outputs, scratch, and logs for each stage.
         lid_input = args.input_folder
@@ -35,10 +37,9 @@ if __name__ == '__main__':
 
         transcription_input = lid_output
         transcription_scratch = os.path.join(args.scratch_folder, "single_lang_sr")
-        transcription_output = os.path.join(args.output_folder, "single_lang_sr")
-        transcription_logs = os.path.join(args.log_folder, "single_lang_sr") if args.log_folder else None
+        transcription_output_base = os.path.join(args.output_folder, "single_lang_sr")
+        transcription_logs_base = os.path.join(args.log_folder, "single_lang_sr") if args.log_folder else None
 
-        merge_input = transcription_output
         merge_output = args.output_folder
 
         # First do language segmentation.
@@ -64,16 +65,16 @@ if __name__ == '__main__':
             args.input_list = manifest
             args.input_folder = transcription_input
             args.scratch_folder = transcription_scratch
-            args.output_folder = transcription_output
-            args.logs_folder = transcription_logs
+            args.output_folder = os.path.join(transcription_output_base, lang)
+            args.log_folder = os.path.join(transcription_logs_base, lang)
             client.run(args, SpeechSDKBatchConfig)
 
         # Third, stitch all the results together.
-        all_segments = [f for f in os.listdir(transcription_output) if f.endswith(".seg.json")]
-        all_originals = set([f.split('.')[0] for f in all_segments])
+        all_segments = glob.glob(transcription_output_base+"/*/*.seg.json")
+        all_originals = set([os.path.basename(f).split('.')[-5] for f in all_segments])
         for original in all_originals:
-            segments = [s for s in all_segments if s.startswith(original)]
-            segments.sort(key=lambda s: int(s.split('.')[-4]))
+            segments = [s for s in all_segments if os.path.basename(s).startswith(original)]
+            segments.sort(key=lambda s: int(os.path.basename(s).split('.')[-4]))
             file_hash = 0
             audio_duration = 0.0
             last_processed_offset = 0.0
@@ -83,8 +84,7 @@ if __name__ == '__main__':
             maskeditn = []
             segment_results = []
             for segment in segments:
-                segment_path = os.path.join(transcription_output, segment)
-                with open(segment_path, encoding="utf-8") as sj:
+                with open(segment, encoding="utf-8") as sj:
                     segment_json = json.load(sj)
                     segment_json = segment_json['AudioFileResults'][0]
                 file_hash = segment_json['AudioFileHash']
@@ -94,7 +94,7 @@ if __name__ == '__main__':
                     itn.append(cr['ITN'])
                     lexical.append(cr['Lexical'])
                     maskeditn.append(cr['MaskedITN'])
-                segment_results.append(segment_json['SegmentResults'])
+                segment_results.extend(segment_json['SegmentResults'])
                 last_processed_offset = segment_json['LastProcessedOffsetInSeconds']
             combined_json = {
                 'AudioFileHash': file_hash,
