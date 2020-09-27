@@ -73,7 +73,7 @@ if __name__ == '__main__':
         all_segments = glob.glob(transcription_output_base+"/*/*.seg.json")
         all_originals = set([os.path.basename(f).split('.')[-5] for f in all_segments])
         for original in all_originals:
-            segments = [s for s in all_segments if os.path.basename(s).startswith(original)]
+            segments = [s for s in all_segments if os.path.basename(s).startswith(original+'.')]
             segments.sort(key=lambda s: int(os.path.basename(s).split('.')[-4]))
             file_hash = 0
             audio_duration = 0.0
