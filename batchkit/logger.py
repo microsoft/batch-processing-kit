@@ -138,6 +138,9 @@ class LogEventQueue(object):
     def critical(self, msg):
         self.log(LogLevel.CRITICAL, msg)
 
+    def fatal(self, msg):
+        self.log(LogLevel.FATAL, msg)
+
 
 def setup_logging(log_folder, console_log_level, file_log_level):
     """

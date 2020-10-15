@@ -4,12 +4,10 @@
 import cProfile
 import multiprocessing
 import signal
-import traceback
 from multiprocessing.process import current_process
 from threading import Thread
 from time import sleep
 from typing import List
-import logging
 import ctypes
 
 from . import work_item
@@ -17,9 +15,6 @@ from .endpoint_status import EndpointStatusChecker
 from .work_item import WorkItemRequest, WorkItemResult
 from .logger import LogEventQueue
 from .utils import kill_children_procs, NonDaemonicPool
-
-
-logger = logging.getLogger("batch")
 
 
 class EndpointManager(Thread):
@@ -32,7 +27,7 @@ class EndpointManager(Thread):
         self.endpoint_name = endpoint_name
         self.endpoint_config = endpoint_config
         self.cache_search_dirs = cache_search_dirs
-        self._log_event_queue = log_event_queue
+        self.logger = log_event_queue
         self.log_folder = log_folder
         self._steal_work_fn = steal_work_fn
         self._notify_work_success_fn = notify_work_success_fn
@@ -71,7 +66,7 @@ class EndpointManager(Thread):
             current_process().name = NonDaemonicPool.sanitize_name(current_process().name, self.name)
             signal.signal(signal.SIGTERM, signal.SIG_DFL)
             signal.signal(signal.SIGINT, signal.SIG_DFL)
-            work_item.init_proc_scope(self._cancellation_token, self._log_event_queue)
+            work_item.init_proc_scope(self._cancellation_token, self.logger)
         # Give the pool more workers than needed for starting concurrency so any scaling is
         # not bottlenecked by the pool itself. It is later scaled up if concurrency increases.
         self._proc_pool = NonDaemonicPool(2*self.endpoint_config['concurrency'], worker_entry)
@@ -99,9 +94,9 @@ class EndpointManager(Thread):
                         self.endpoint_config["isSecure"],
                         self.endpoint_config["isCloudService"]):
                     self.current_concurrency.value = 0
-                    logger.warning("{0}: Endpoint {1}:{2} is unavailable at the moment "
-                                   "so quarantining from requests.".format(
-                                        self.name, self.endpoint_config["host"], self.endpoint_config["port"]))
+                    self.logger.warning("{0}: Endpoint {1}:{2} is unavailable at the moment "
+                                        "so quarantining from requests.".format(
+                                            self.name, self.endpoint_config["host"], self.endpoint_config["port"]))
                     sleep(20)
                 else:
                     self.current_concurrency.value = self.endpoint_config['concurrency']
@@ -125,7 +120,7 @@ class EndpointManager(Thread):
             self._current_requests_lock.acquire()
             while True:
                 if self._stop_requested:
-                    logger.info("EndpointManager name: {0}  was requested to stop.".format(self.name))
+                    self.logger.info("EndpointManager name: {0}  was requested to stop.".format(self.name))
                     self._cancellation_token.set()
                     self._current_requests_lock.release()
                     self._finalize()
@@ -140,25 +135,24 @@ class EndpointManager(Thread):
 
             # Steal some work. This can also be returned prematurely
             # if we are being woken up to stop.
-            logger.debug("EndpointManager name: {0}  will try to steal work".format(self.name))
+            self.logger.debug("EndpointManager name: {0}  will try to steal work".format(self.name))
             self._in_steal_work_fn = True  # No lock protection because only this loop can toggle.
             work: WorkItemRequest = self._steal_work_fn(self)
             self._in_steal_work_fn = False
             if work.filepath == "STOP":
                 # This is an indicator we need to shut down.
-                logger.info("EndpointManager name: {0}  was requested to stop while stealing work.".format(self.name))
+                self.logger.info(
+                    "EndpointManager name: {0}  was requested to stop while stealing work.".format(self.name))
                 self._stop_requested = True
                 self._cancellation_token.set()
                 self._finalize()
                 return
 
-            logger.debug("EndpointManager name: {0}  stole work and will delegate to a worker.".format(self.name))
+            self.logger.debug("EndpointManager name: {0}  stole work and will delegate to a worker.".format(self.name))
             # Assign the request to a worker.
             with self._current_requests_lock:
                 self._current_requests += 1
                 self._cnt_apply_async += 1
-                # For the worker we're about to make.
-                name = "{0}_WorkerThread{1}".format(self.name, self._cnt_apply_async)
 
             self._proc_pool.apply_async(
                 work.process,
@@ -181,7 +175,7 @@ class EndpointManager(Thread):
         # should be invoked only when no WorkItemResult could be produced.
         msg = "EndpointManager {0} failure in a WorkItemRequest: {1}\n{2}".format(
             self.name, type(exception).__name__, exception.__traceback__)
-        logger.fatal(msg)
+        self.logger.fatal(msg)
         kill_children_procs()
         print(msg)  # Since may not get logged
         exit(1)
@@ -205,7 +199,7 @@ class EndpointManager(Thread):
             with self._current_requests_lock:
                 self._successive_failures += 1
                 if self._successive_failures > 3:
-                    logger.critical(
+                    self.logger.critical(
                         "Endpoint manager {0} has failed {1} consecutive recognitions on endpoint {2}:{3}".format(
                             self.name, self._successive_failures,
                             self.endpoint_config["host"], self.endpoint_config["port"]
