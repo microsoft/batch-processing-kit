@@ -36,18 +36,21 @@ class SpeechSDKEndpointStatusChecker(EndpointStatusChecker):
                     # Also expect a healthy response from /status path which
                     # indicates the container's components are overall okay
                     # including api key validity.
-                    result = requests.get("http://{0}:{1}/status".format(host, port))
+                    status_url = "http://{0}:{1}/status".format(host, port)
+                    result = requests.get(status_url)
                     result = json.loads(result.text)
-                    if result['apiStatus'] == 'Valid' and result['apiStatusMessage'] == 'Api Key is valid.':
+                    if result['apiStatus'] == 'Valid' and result['apiStatusMessage'].startswith('Api Key is valid'):
                         return True
                     else:
                         self.log_event_queue.warning(
-                            "Currently failing to connect to {0} on port {1}".format(host, port))
+                            "Currently failing to connect to {0} on port {1}. "
+                            "Socket opened but response from /status URL {2} was: {3}".format(
+                                host, port, status_url, result))
                         return False
                 else:
                     # Opening connection with the Speech Recognition FrontEnd is otherwise assumed sufficient.
                     return True
         except OSError as e:
             self.log_event_queue.warning(
-                "Currently failing to connect to {0} on port {1}: {2}".format(host, port, e))
+                "Currently failing to connect to {0} (unable to open socket) on port {1}: {2}".format(host, port, e))
             return False
