@@ -301,6 +301,11 @@ class FileRecognizer:
             value='Detailed',
             channel=speechsdk.ServicePropertyChannel.UriQueryParameter
         )
+        speech_config.set_service_property(
+            name='punctuation',
+            value='implicit',
+            channel=speechsdk.ServicePropertyChannel.UriQueryParameter
+        )
 
         if self._enable_sentiment:
             speech_config.set_service_property(
