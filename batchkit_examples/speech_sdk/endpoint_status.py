@@ -39,7 +39,7 @@ class SpeechSDKEndpointStatusChecker(EndpointStatusChecker):
                     status_url = "http://{0}:{1}/status".format(host, port)
                     result = requests.get(status_url)
                     result = json.loads(result.text)
-                    if result['apiStatus'] == 'Valid' and result['apiStatusMessage'].startswith('Api Key is valid'):
+                    if 'valid' in result['apiStatus'].lower() and 'valid' in result['apiStatusMessage'].lower():
                         return True
                     else:
                         self.log_event_queue.warning(
