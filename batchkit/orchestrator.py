@@ -297,7 +297,7 @@ class Orchestrator:
 
                 # Eliminate this manager early if we detect a language mismatch.
                 # It will be recreated on a new batch.
-                if work.language and manager.endpoint_config["language"] != work.language:
+                if work.language and manager.endpoint_config["language"].lower() != work.language.lower():
                     self._file_queue.put(work)  # back on queue for someone qualified
                     self._file_queue_size += 1
                     self._file_queue_cond.notify()
