@@ -95,7 +95,7 @@ class ApiServer(object):
             Thread(
                 target=self.flask_app.run,
                 kwargs={
-                    "host": "localhost", "port": port,
+                    "host": "0.0.0.0", "port": port,
                     "debug": True, "use_reloader": False},
                 name="MainProc_FlaskAppParentThread",
                 daemon=True
