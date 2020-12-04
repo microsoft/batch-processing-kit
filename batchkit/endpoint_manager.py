@@ -34,13 +34,13 @@ class EndpointManager(Thread):
         self._notify_work_failure_fn = notify_work_failure_fn
         self._endpoint_status_checker: EndpointStatusChecker = endpoint_status_checker
 
-        # Create atomic vars for RTF and Concurrency so that we can be
+        # Create Atomic Variables for RTF and Concurrency so that we can be
         # manipulated by our self or someone else and also consume the
         # current setting at any point. Initial value for RTF is as per
-        # config, and initial concurrency as well as concurrency after
-        # an endpoint comes back online is set to config value by default.
+        # config. Concurrency after an endpoint is detected as being
+        # online and healthy is set to config value by default.
         self.current_rtf = multiprocessing.Value(ctypes.c_float, float(self.endpoint_config['rtf']))
-        self.current_concurrency = multiprocessing.Value(ctypes.c_int32, 0)
+        self.current_concurrency = multiprocessing.Value(ctypes.c_int32, 0)  # Assume unhealthy til prove otherwise.
 
         # These are terminal once set for this EndpointManager.
         self._stop_requested = False
@@ -88,23 +88,30 @@ class EndpointManager(Thread):
 
         def check_throttle():
             while not self._stop_requested:
-                if not self._endpoint_status_checker.check_endpoint(
-                        self.endpoint_config["host"],
-                        self.endpoint_config["port"],
-                        self.endpoint_config["isSecure"],
-                        self.endpoint_config["isCloudService"]):
-                    self.current_concurrency.value = 0
-                    self.logger.warning("{0}: Endpoint {1}:{2} is unavailable at the moment "
-                                        "so quarantining from requests.".format(
-                                            self.name, self.endpoint_config["host"], self.endpoint_config["port"]))
-                    sleep(20)
-                else:
-                    self.current_concurrency.value = self.endpoint_config['concurrency']
-                    with self._current_requests_lock:
-                        self._current_requests_cond.notify()
-                    sleep(3)
-                # Ensure the process pool size can always satisfy the current concurrency without queueing.
-                self._proc_pool.set_min_num_procs(self.current_concurrency.value)
+                try:
+                    if not self._endpoint_status_checker.check_endpoint(
+                            self.endpoint_config["host"],
+                            self.endpoint_config["port"],
+                            self.endpoint_config["isSecure"],
+                            self.endpoint_config["isCloudService"]):
+                        self.current_concurrency.value = 0
+                        self.logger.warning("{0}: Endpoint {1}:{2} is unavailable at the moment "
+                                            "so quarantining from requests.".format(
+                                                self.name, self.endpoint_config["host"], self.endpoint_config["port"]))
+                        sleep(20)
+                    else:
+                        self.current_concurrency.value = self.endpoint_config['concurrency']
+                        with self._current_requests_lock:
+                            self._current_requests_cond.notify()
+                        sleep(3)
+                    # Ensure the process pool size can always satisfy the current concurrency without queueing.
+                    self._proc_pool.set_min_num_procs(self.current_concurrency.value)
+                except Exception as e:
+                    self.logger.error(
+                        "EndpointManager {0} has its EndpointStatusChecker plug-in of type {1} failing "
+                        "due to: {2}\n{3}".format(
+                            self.name, type(self._endpoint_status_checker).__name__, e.__repr__(), e.__traceback__))
+
         Thread(
             target=check_throttle,
             name="{0}_BadEndpointThrottler".format(self.name),
@@ -181,29 +188,30 @@ class EndpointManager(Thread):
         exit(1)
 
     def pool_callback(self, result: WorkItemResult):
-        # As we just finished a request, we let the main thread
-        # have an opportunity to check if we have capacity at this time
-        # to steal and do another request.
         with self._current_requests_lock:
             self._cnt_pool_cb += 1
-            self._current_requests -= 1
-            self._current_requests_cond.notify()
 
         if result.passed or result.cached:
             self._notify_work_success_fn(result.filepath, self, result)
             self._successive_failures = 0
         else:
             self._notify_work_failure_fn(result.filepath, self, result)
-
-            # Flag successive failures in log.
             with self._current_requests_lock:
                 self._successive_failures += 1
-                if self._successive_failures > 3:
+                if self._successive_failures >= 5:
                     self.logger.critical(
-                        "Endpoint manager {0} has failed {1} consecutive recognitions on endpoint {2}:{3}".format(
+                        "Endpoint manager {0} has failed {1} consecutive work items on endpoint {2}:{3}".format(
                             self.name, self._successive_failures,
                             self.endpoint_config["host"], self.endpoint_config["port"]
                         )
                     )
+                    # Throttle back. Positive health check could restore.
+                    self.current_concurrency.value = 0
+
+        # As we just finished a request, we let the main thread
+        # have an opportunity to check if we have capacity at this time
+        # to steal and do another request.
         with self._current_requests_lock:
+            self._current_requests -= 1
+            self._current_requests_cond.notify()
             self._cnt_pool_cb_rets += 1

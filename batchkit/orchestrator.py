@@ -358,6 +358,7 @@ class Orchestrator:
             # Check retry-ability and num retries burned already.
             if result.can_retry and \
                     self._work_results[filepath].attempts - 1 < ORCHESTRATOR_SCOPE_MAX_RETRIES:
+                self._log_event_que.debug("Placed work item {0} back into queue since retriable.".format(filepath))
                 self._file_queue.put(self._in_progress[filepath])
                 self._file_queue_size += 1
                 self._file_queue_cond.notify()
