@@ -188,24 +188,17 @@ class EndpointManager(Thread):
         exit(1)
 
     def pool_callback(self, result: WorkItemResult):
-        # As we just finished a request, we let the main thread
-        # have an opportunity to check if we have capacity at this time
-        # to steal and do another request.
         with self._current_requests_lock:
             self._cnt_pool_cb += 1
-            self._current_requests -= 1
-            self._current_requests_cond.notify()
 
         if result.passed or result.cached:
             self._notify_work_success_fn(result.filepath, self, result)
             self._successive_failures = 0
         else:
             self._notify_work_failure_fn(result.filepath, self, result)
-
-            # Flag successive failures in log.
             with self._current_requests_lock:
                 self._successive_failures += 1
-                if self._successive_failures > 5:
+                if self._successive_failures >= 5:
                     self.logger.critical(
                         "Endpoint manager {0} has failed {1} consecutive work items on endpoint {2}:{3}".format(
                             self.name, self._successive_failures,
@@ -215,5 +208,10 @@ class EndpointManager(Thread):
                     # Throttle back. Positive health check could restore.
                     self.current_concurrency.value = 0
 
+        # As we just finished a request, we let the main thread
+        # have an opportunity to check if we have capacity at this time
+        # to steal and do another request.
         with self._current_requests_lock:
+            self._current_requests -= 1
+            self._current_requests_cond.notify()
             self._cnt_pool_cb_rets += 1
