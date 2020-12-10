@@ -397,15 +397,18 @@ class Orchestrator:
                 # or no longer exist). Do not touch EndpointManagers that have not changed.
                 new_em_objs: List[EndpointManager] = []
                 # Start by assuming every EndpointManager needs to be deleted.
-                deleted_em_configs: Dict[str, Dict] = \
-                    {em.endpoint_name: em.endpoint_config for em in self._endpoint_managers}
+                deleted_managers: Dict[str, EndpointManager] = \
+                    {em.endpoint_name: em for em in self._endpoint_managers}
 
                 for endpoint_name, endpoint_config in config_data.items():
                     # If an existing endpoint is totally preserved in the new config, don't delete it.
-                    if endpoint_name in deleted_em_configs and \
-                      endpoint_config == deleted_em_configs[endpoint_name]:
+                    # Also require that the endpoint's manager is not terminally stopped, otherwise we need
+                    # a new instance of it anyway.
+                    if endpoint_name in deleted_managers and \
+                      endpoint_config == deleted_managers[endpoint_name].endpoint_config and \
+                      not deleted_managers[endpoint_name]._stop_requested:  # noqa
                         # Don't delete this EndpointManager and don't make a new one.
-                        del deleted_em_configs[endpoint_name]
+                        del deleted_managers[endpoint_name]
                         continue
 
                     new_em_objs.append(
@@ -440,7 +443,7 @@ class Orchestrator:
             # Also swap the EndpointManagers under lock in case of race.
             # First stop the old EndpointManagers to be deleted.
             for m in self._endpoint_managers:
-                if m.endpoint_name in deleted_em_configs:
+                if m.endpoint_name in deleted_managers:
                     self._old_managers.add(m.name)
                     m.request_stop()
 
@@ -453,7 +456,7 @@ class Orchestrator:
                 owner_endpoint_name = self._in_progress_owner[filepath].endpoint_name
                 # If the EndpointManager that owns this work item is being deleted,
                 # free up the work item.
-                if owner_endpoint_name in deleted_em_configs:
+                if owner_endpoint_name in deleted_managers:
                     del work_in_progress[filepath]
                     del work_in_progress_owner[filepath]
                     self._file_queue.put(work_item)
@@ -471,7 +474,7 @@ class Orchestrator:
             # Record the latest set of all EndpointManagers.
             self._endpoint_managers = \
                 [em for em in self._endpoint_managers
-                 if em.endpoint_name not in deleted_em_configs] + \
+                 if em.endpoint_name not in deleted_managers] + \
                 new_em_objs
 
             # Ensure that they are all using the correct type of EndpointStatusChecker
