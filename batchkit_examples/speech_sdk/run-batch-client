@@ -102,13 +102,13 @@ if __name__ == '__main__':
                 'AudioFileName': original,
                 'AudioFileUrl': os.path.join(lid_input, original),
                 'AudioLengthInSeconds': audio_duration,
-                'CombinedResults': {
+                'CombinedResults': [{
                     'ChannelNumber': None,
                     'Display': " ".join(display),
                     'ITN': " ".join(itn),
                     'Lexical': " ".join(lexical),
                     'MaskedITN': " ".join(maskeditn),
-                },
+                }],
                 'LastProcessedOffsetInSeconds': last_processed_offset,
                 'SegmentResults': segment_results,
                 'TranscriptionStatus': 'Succeeded',
