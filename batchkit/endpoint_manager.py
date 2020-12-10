@@ -61,15 +61,28 @@ class EndpointManager(Thread):
             self.pr = cProfile.Profile()
 
         # A process pool that will be used by this EndpointManager only.
+        # Note that the concurrency Atomic Var and the proc pool are managed asynchronous to each other.
         assert multiprocessing.get_start_method() == 'fork'
-        def worker_entry(*args):
-            current_process().name = NonDaemonicPool.sanitize_name(current_process().name, self.name)
-            signal.signal(signal.SIGTERM, signal.SIG_DFL)
-            signal.signal(signal.SIGINT, signal.SIG_DFL)
-            work_item.init_proc_scope(self._cancellation_token, self.logger)
-        # Give the pool more workers than needed for starting concurrency so any scaling is
-        # not bottlenecked by the pool itself. It is later scaled up if concurrency increases.
-        self._proc_pool = NonDaemonicPool(2*self.endpoint_config['concurrency'], worker_entry)
+        self._proc_pool: NonDaemonicPool = None
+
+    def _init_proc_pool(self):
+        """
+        Intended for lazy initialization of the worker process pool by the EndpointManager main thread.
+        This must be invoked before the very first work item could be run by this EndpointManager.
+        """
+        if not self._proc_pool:
+            # Concurrency can change dynamically later but this is the starting pool size so that we are not
+            # initially bottlenecked by the pool itself. Pool is later scaled up if concurrency exceeds it.
+            start_pool_size = self.endpoint_config['concurrency']
+            self.logger.debug("{0}: Lazy-initializing multiproc worker pool. Starting size: {1} procs".format(
+                self.name, start_pool_size))
+
+            def worker_entry(*args):
+                current_process().name = NonDaemonicPool.sanitize_name(current_process().name, self.name)
+                signal.signal(signal.SIGTERM, signal.SIG_DFL)
+                signal.signal(signal.SIGINT, signal.SIG_DFL)
+                work_item.init_proc_scope(self._cancellation_token, self.logger)
+            self._proc_pool = NonDaemonicPool(start_pool_size, worker_entry)
 
     def set_endpoint_status_checker(self, endpoint_status_checker: EndpointStatusChecker):
         # Not necessary to update this functor under lock since we only ever read in this class.
@@ -80,9 +93,10 @@ class EndpointManager(Thread):
         if self._enable_profiling:
             self.pr.disable()
             self.pr.dump_stats("/tmp/{0}".format(self.name))
-        self._proc_pool.close()
-        self._proc_pool.terminate()
-        self._proc_pool.join()
+        if self._proc_pool:
+            self._proc_pool.close()
+            self._proc_pool.terminate()
+            self._proc_pool.join()
 
     def run(self):
 
@@ -105,7 +119,8 @@ class EndpointManager(Thread):
                             self._current_requests_cond.notify()
                         sleep(3)
                     # Ensure the process pool size can always satisfy the current concurrency without queueing.
-                    self._proc_pool.set_min_num_procs(self.current_concurrency.value)
+                    if self._proc_pool:
+                        self._proc_pool.set_min_num_procs(self.current_concurrency.value)
                 except Exception as e:
                     self.logger.error(
                         "EndpointManager {0} has its EndpointStatusChecker plug-in of type {1} failing "
@@ -161,6 +176,7 @@ class EndpointManager(Thread):
                 self._current_requests += 1
                 self._cnt_apply_async += 1
 
+            self._init_proc_pool()  # Lazy init.
             self._proc_pool.apply_async(
                 work.process,
                 [self.endpoint_config, self.current_rtf.value],

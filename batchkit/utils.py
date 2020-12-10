@@ -210,7 +210,10 @@ class NonDaemonicPool(pool.Pool):
             self._repopulate_pool()
 
     def set_min_num_procs(self, num_procs):
+        # We only grow the pool size.
         if num_procs > self._processes:
+            # Set the intention to grow asynchronously, but don't modify data struct directly.
+            # The pool manager's synchronous path will invoke _maintain_pool() to take it up.
             self.target_num_procs = num_procs
 
 
