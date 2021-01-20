@@ -255,7 +255,8 @@ class FileRecognizer:
             # backend has absolutely no idea how to even make a homogeneous language estimate. In this case
             # we would rather naively assume some language.
             if len(lang_segments) == 1 and 'unknown' in lang_segments[0][0].lower():
-                lang_segments[0][0] = 'en-us'
+                lang_segments[0][0] = 'en-us' if 'en-us' in self.request.candidate_languages \
+                    else self.request.candidate_languages[0]
         except:
             # While processing we could get a FailedRecognitionError, CancellationTokenException,
             # or other unexpected exceptions. Upstream decides whether to retry, but we need to at least
