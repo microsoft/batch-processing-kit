@@ -14,25 +14,22 @@ from typing import List, Optional
 import copy
 import wave
 from collections import defaultdict
+import grpc
 
 from batchkit.logger import LogEventQueue, LogLevel
 from batchkit.utils import sha256_checksum, write_json_file_atomic, \
     EndpointDownError, FailedRecognitionError, tee_to_pipe_decorator, CancellationTokenException, create_dir
 from batchkit.constants import RECOGNIZER_SCOPE_RETRIES
-from batchkit_examples.speech_sdk.audio import init_gstreamer, convert_audio, WavFileReaderCallback
+from batchkit_examples.speech_sdk.audio import init_gstreamer, convert_audio, WavFileReaderCallback, \
+    InvalidAudioFormatError
 from .work_item import LangIdWorkItemRequest, LangIdWorkItemResult
 from .endpoint_status import LangIdEndpointStatusChecker
 
-import azure.cognitiveservices.speech as speechsdk
-
-
-# Time unit for the Speech SDK
-TIME_UNIT: float = 10000000.0
-
-LID_URL_BASE = "<base>/speech/languagedetection/cognitiveservices/v1"
-
-# File marked failed after this many successive segment classification failures.
-MAX_CONSECUTIVE_LID_REQUEST_FAILURES = 5
+from batchkit_examples.speech_sdk.lang_id.proto import (
+    LanguageIdRpc_pb2, LanguageIdRpc_pb2_grpc, LIDRequestMessage_pb2,
+    LIDConfigMessage_pb2, AudioConfig_pb2, IdentifierConfig_pb2, IdentificationCompletedMessage_pb2,
+    LIDResponseMessage_pb2, FinalResultMessage_pb2
+)
 
 
 def classify_file_retry(run_classifier_function):
@@ -96,23 +93,13 @@ class FileRecognizer:
             when pushing the stream to server.
         :param log_event_queue: object for enqueueing events to be logged asap.
         """
-        self._host = "ws{0}://{1}:{2}".format(
-            "s" if endpoint_config["isSecure"] else "",
-            endpoint_config["host"],
-            endpoint_config["port"]
-        )
-        self._subscription = endpoint_config.get("subscription")
+        self._host = "{0}:{1}".format(endpoint_config["host"], endpoint_config["port"])
         self._log_event_queue = log_event_queue
-
         self.request = request
-        self._throttle = str(round(rtf * 100))
 
         # Set lazily later.
         self._audio_duration: Optional[float] = None
         self._converted_audio_file: Optional[str] = None
-
-        self._lid_request_consecutive_failures = 0
-        self._last_lid_request_err: Optional[str] = None
 
     def classify(self, cancellation_token: multiprocessing.Event) -> LangIdWorkItemResult:
         """
@@ -181,16 +168,10 @@ class FileRecognizer:
         )
 
     def __recognize_in_subproc(self, start_offset: float, cancellation_token: multiprocessing.Event):
-        """
-        Invoke the Speech SDK in a subprocess to do continuous language segmentation on an audio file.
-        This provides per-request process isolation to prevent unexpected terminal faults upstream.
-        :param audio_file: original audio file to recognize
-        :param json_data: any result from a previous run of this file even if it was a failed transcription
-        """
         # Check that this endpoint is actually healthy.
-        address, port = self._host.split("//")[1].split(":")
+        address, port = self._host.split(":")
         if not LangIdEndpointStatusChecker(self._log_event_queue). \
-                check_endpoint(address, port, False, True):
+                check_endpoint(address, port, False, False):
             raise EndpointDownError("Target {0} in process {1} failed.".format(self._host, current_process().name))
 
         # Prepare to fork off the work to a child proc for isolation
@@ -250,12 +231,6 @@ class FileRecognizer:
                 return obj
 
     def __classify(self, start_offset_secs, cancellation_token) -> float:
-        """
-        Use Microsoft Speech SDK to do continuous language segmentation on a single WAV file
-        :param cancellation_token multiprocessing.Event: to signal early exit.
-        :returns: If all went well, just an int containing the audio duration.
-                  The results would already be written as files in that case.
-        """
         # Fail fast if work item has already been cancelled.
         if cancellation_token.is_set():
             msg = "Canceled {0} on process {1} targeting {2} by cancellation token (before start).".format(
@@ -272,8 +247,10 @@ class FileRecognizer:
         assert self._converted_audio_file is not None
 
         try:
-            lang_segments = self.__connect_contiguous_segments(
-                self.__continuous_lid_rolling_with_voting(cancellation_token))
+            # Additional checks beyond the framework's audio validation, because LID model more constrained.
+            self._validate_file_format(self._converted_audio_file)
+
+            lang_segments = self._segment(self._converted_audio_file, cancellation_token)
         except:
             # While processing we could get a FailedRecognitionError, CancellationTokenException,
             # or other unexpected exceptions. Upstream decides whether to retry, but we need to at least
@@ -317,241 +294,88 @@ class FileRecognizer:
             lang_segments,
             seg_summ_file,
             log=False,
-
         )
         self._log_event_queue.info("Atomically wrote file {0}".format(seg_summ_file))
         return self._audio_duration
 
-    def __single_segment_lid_request(self,
-                                     start_offset: float = 0.0,
-                                     end_offset: float = 0.0) -> str:
-        """
-        :returns: If the language could not be detected but this was due to signal or model insufficiency, the
-                  detected_language is returned as 'unknown'. Any error from the LID container or due to the
-                  Speech SDK either resolves on a retry or until the max retries are hit in which case a
-                  FailedRecognitionError is thrown.
-        """
-        while self._lid_request_consecutive_failures < MAX_CONSECUTIVE_LID_REQUEST_FAILURES:
+    def _segment(self, audio_file: str, cancellation_token: multiprocessing.Event):
+        channel = grpc.insecure_channel(self._host)
+        stub = LanguageIdRpc_pb2_grpc.LanguageIdStub(channel)
+        segments = []
 
-            if start_offset == 0 and end_offset == 0:
-                audio_config = speechsdk.audio.AudioConfig(filename=self._converted_audio_file)
-            else:
-                callback = WavFileReaderCallback(
-                    filename=self._converted_audio_file,
-                    log_event_queue=self._log_event_queue,
-                    start_offset=start_offset,  # in seconds
-                    end_offset=end_offset,
-                )
-                stream = speechsdk.audio.PullAudioInputStream(callback, callback.audio_format())
-                audio_config = speechsdk.audio.AudioConfig(stream=stream)
+        for resp in stub.Identify(self._generate_messages(audio_file, cancellation_token)):
 
-            # Constrain the language candidate set in the endpoint url.
-            endpoint = self.__lid_url_for_candidate_langs()
 
-            sdk_config = speechsdk.SpeechConfig(endpoint=endpoint, subscription=self._subscription)
-            sdk_config.enable_dictation()
-            sdk_config.set_property_by_name('Auto-Detect-Source-Language-Only', 'true')
 
-            # Throttle to provided RTF. Throttle from the beginning.
-            sdk_config.set_property_by_name("SPEECH-AudioThrottleAsPercentageOfRealTime", self._throttle)
-            sdk_config.set_property_by_name("SPEECH-TransmitLengthBeforThrottleMs", "0")
-
-            # Important - we need to have the phraseDetection mode set to None for all language-detection-only requests
-            sdk_config.set_service_property(
-                name='speechcontext-phraseDetection.Mode',
-                value='None',
-                channel=speechsdk.ServicePropertyChannel.UriQueryParameter,
-            )
-            sdk_config.set_service_property(
-                name='speechcontext-languageId.OnUnknown.Action',
-                value='None',
-                channel=speechsdk.ServicePropertyChannel.UriQueryParameter,
-            )
-            # As opposed to PrioritizeLatency, since this is a batch (non-real-time) application.
-            sdk_config.set_service_property(
-                name='speechcontext-languageId.Priority',
-                value='PrioritizeAccuracy',
-                channel=speechsdk.ServicePropertyChannel.UriQueryParameter,
-            )
-
-            # Add logs for debugging.
-            audio_file_basename = os.path.basename(self.request.filepath)
-            if self.request.log_dir is not None:
-                base, ext = os.path.splitext(audio_file_basename)
-                log_filename = "{0}.{1}.sdk.langid.log".format(os.path.join(base + "_" + ext[1:]),
-                                                               current_process().name)
-                sdk_config.set_property(
-                    speechsdk.PropertyId.Speech_LogFilename,
-                    os.path.join(self.request.log_dir, log_filename))
-                sdk_config.set_property_by_name("SPEECH-FileLogSizeMB", "10")
-
-            recognizer = speechsdk.SpeechRecognizer(
-                speech_config=sdk_config,
-                audio_config=audio_config
-            )
-            result = recognizer.recognize_once()
-
-            # On successful classification.
-            if result.reason == speechsdk.ResultReason.RecognizedSpeech:
-                detected_lang = result.properties.get(
-                    speechsdk.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult, "unknown").lower()
+            if resp.WhichOneof('message') == 'final_result':
+                response: FinalResultMessage_pb2 = resp.final_result
+                self._log_event_queue.debug("Segment identified for file {0}: {1}".format(audio_file, response))
+                segments.append([
+                    response.language,
+                    float(response.start_offset_ms) / 1000.0,
+                    float(response.end_offset_ms) / 1000.0
+                ])
+            elif resp.WhichOneof('message') == 'identification_completed':
                 self._log_event_queue.debug(
-                    "SEGMENT CLASSIFIED: File: {0}  start_offset: {1}  end_offset: {2}  "
-                    "  Detected Lang: {3}".format(self._converted_audio_file, start_offset, end_offset, detected_lang))
-                self._lid_request_consecutive_failures = 0
-                self._last_lid_request_err = None
-                return detected_lang
+                    "LID service finished segmenting file {0}: {1}".format(audio_file, resp))
 
-            # Unexpected cancellation by the server (or less likely, by the sdk).
-            elif result.reason == speechsdk.ResultReason.Canceled:
-                cancellation_details = result.cancellation_details
-                self._log_event_queue.error(
-                    "SEGMENT CANCELED UNEXPECTEDLY by server: File: {0}  start_offset: {1}  end_offset: {2}  "
-                    "  Endpoint: {3}".format(self._converted_audio_file, start_offset, end_offset, self._host))
-                if cancellation_details.reason == speechsdk.CancellationReason.Error:
-                    self._log_event_queue.error(
-                        "Cancellation Reason was an Error: {0}".format(cancellation_details.error_details))
-                self._lid_request_consecutive_failures += 1
-                self._last_lid_request_err = cancellation_details.error_details
-
-            # Else something else went wrong that we are unfamiliar with.
-            else:
-                err_str = "{0} {1}".format(result.reason, result.__repr__())
-                self._log_event_queue.error(
-                    "SEGMENT RESULT HAS UNEXPECTED REASON: File: {0}  start_offset: {1}  end_offset: {2}  "
-                    "Endpoint: {3}  Reason code: {4}  Result object: {5}".format(
-                        self._converted_audio_file, start_offset, end_offset, self._host, result.reason, result.__repr__()))
-                self._lid_request_consecutive_failures += 1
-                self._last_lid_request_err = err_str
-
-        # Retries hit the max. This is expected to be a very rare path, so we throw.
-        raise FailedRecognitionError("Too many max consecutive LID request failures ({0}). Last error: {1}".format(
-            MAX_CONSECUTIVE_LID_REQUEST_FAILURES, self._last_lid_request_err))
-
-    def __continuous_lid_rolling(self, cancellation_token: multiprocessing.Event):
-        results = []
-        # Constants. These might be too difficult to explain to users but consider making these user-settable params
-        # so that users can make their own trade-off between language cross-over precision and compute intensity.
-        window = 6.0  # should be an integer multiple of window
-        stride = 3.0  # should be an integer multiple of trans_stride
-        trans_stride = 1.0  # stride when there is language crossover ambiguity, should not be a multiple of 1.0
-        time = 0.0
-        last_detected = None
-        last_detailed = False
-        while time + window < self._audio_duration:
-
-            # Check for cancellation reasonably often..
+            # Before going to next msg, check for cancellation.
             if cancellation_token.is_set():
                 msg = "Canceled during language segmentation on file: {0} on process {1} " \
                       "targeting {2} by cancellation token (in middle).".format(
-                        self.request.filepath, current_process().name, self._host
-                )
+                        self.request.filepath, current_process().name, self._host)
                 self._log_event_queue.info(msg)
                 raise CancellationTokenException(msg)
 
-            # Classify language for this window.
-            detected = self.__single_segment_lid_request(start_offset=time, end_offset=time + window)
-            results.append([detected, time, time + window])
-
-            # Detection of language cross-over..
-            if last_detected and detected and last_detected != detected:
-                # Additional detailing from last time to this time.
-                if not last_detailed:
-                    time_ = time - stride + trans_stride
-                    while time_ < time:
-                        detected_ = self.__single_segment_lid_request(start_offset=time_, end_offset=time_ + window)
-                        results.append([detected_, time_, time_ + window])
-                        time_ += trans_stride
-                # Additional detailing past this time.
-                time_ = time + trans_stride
-                while time_ + window < self._audio_duration and time_ < time + stride:
-                    detected_ = self.__single_segment_lid_request(start_offset=time_, end_offset=time_ + window)
-                    results.append([detected_, time_, time_ + window])
-                    time_ += trans_stride
-                last_detailed = True
-            # No language cross-over..
-            else:
-                # Thus no need for detailing around +/- this window's time.
-                last_detailed = False
-
-            last_detected = detected
-            time += stride
-        return results
-
-    def __continuous_lid_rolling_with_voting(self, cancellation_token: multiprocessing.Event):
-        results = self.__continuous_lid_rolling(cancellation_token)
-        # These are the votes for a given second t representing [t, t+1.0)
-        votes_by_time = defaultdict(lambda: defaultdict(int))
-        # This is the max vote for a given second t representing [t, t+1.0)
-        maxvote_by_time = defaultdict(lambda: "unknown")
-        results_voted = []
-        max_time_voted = 0  # representing [time, time+1.0) for which we have any vote
-        # Do voting. Make a vote for each 1.0 second of audio.
-        for result in results:
-            lang = result[0]
-            start = int(round(result[1]))
-            end = int(round(result[2])) - 1  # inclusive
-            max_time_voted = max(max_time_voted, end)
-            for t in range(start, end + 1, 1):
-                votes_by_time[t][lang] += 1
-
-        # Get the max votes at every second.
-        first_known_lang = "unknown"
-        for t in range(0, max_time_voted + 1):
-            max_lang = "unknown"
-            max_votes = 0
-            for lang, num_votes in votes_by_time[t].items():
-                if lang != "unknown" and num_votes > max_votes:
-                    max_lang = lang
-                    max_votes = num_votes
-            maxvote_by_time[t] = max_lang
-            if first_known_lang == "unknown":
-                first_known_lang = max_lang
-
-        # Finally, put together contiguous sequences and remove 'unknown'. The default policy for 'unknown' vote
-        # is to re-use the last known maxvote in time. If the audio starts unknown, then we use the
-        # first known language seen.
-        last_known_lang = first_known_lang
-        current_start = 0
-        last_sec_incl = int(self._audio_duration)
-        for t in range(1, last_sec_incl + 1):
-            current_lang = maxvote_by_time[t]
-            last_lang = maxvote_by_time[t - 1]
-            if current_lang != last_lang:
-                results_voted.append([last_lang if last_lang != 'unknown' else last_known_lang, current_start, t])
-                current_start = t
-            if current_lang != "unknown":
-                last_known_lang = current_lang
-        # Final language segment
-        last_lang = maxvote_by_time[last_sec_incl]
-        results_voted.append(
-            [last_lang if last_lang != 'unknown' else last_known_lang, current_start, last_sec_incl + 1])
-        return results_voted
-
-    def __connect_contiguous_segments(self, segments):
-        if len(segments) == 0:
-            return segments
-        segments = copy.deepcopy(segments)
-        sorted(segments, key=lambda seg: seg[1], reverse=False)
-        on_idx = 0
-        for next_seg in segments[1:]:
-            if segments[on_idx][0] == next_seg[0] and segments[on_idx][2] == next_seg[1]:
-                segments[on_idx][2] = next_seg[2]
-            else:
-                on_idx += 1
-                segments[on_idx] = next_seg
-        # on_idx is the last one inclusive
-        if on_idx < len(segments) - 1:
-            del segments[on_idx + 1:]
         return segments
 
-    def __lid_url_for_candidate_langs(self) -> str:
-        url = LID_URL_BASE.replace("<base>", self._host) + '?'
-        for lang in self.request.candidate_languages:
-            url += "speechcontext-languageId.Languages={0}&".format(lang)
-            if lang != self.request.candidate_languages[-1]:
-                url += '&'
-        return url
+    def _validate_file_format(self, audio_file):
+        with wave.open(audio_file, 'rb') as fd:
+            # Currently only compatible with mono.
+            nchan = fd.getnchannels()
+            if nchan != 1:
+                raise InvalidAudioFormatError("LID currently only compatible with 1-channel audio.")
+
+            # Currently only compatible with 8kHz or 16kHz.
+            framerate = fd.getframerate()
+            if framerate not in [8000, 16000]:
+                raise InvalidAudioFormatError("LID currently only compatible with 8kHz or 16kHz framerate.")
+
+            # Currently only compatible with 16-bit samples.
+            sampwidth = fd.getsampwidth()
+            if sampwidth != 2:
+                raise InvalidAudioFormatError("LID currently only compatible with 16-bit samples.")
+
+    def _generate_messages(self, audio_file: str, cancellation_token: multiprocessing.Event):
+        self._validate_file_format(audio_file)
+
+        # Config message first.
+        message = LIDRequestMessage_pb2.LIDRequestMessage()
+        message.config.audio_config.encoding = AudioConfig_pb2.AudioConfig.PCM
+        message.config.audio_config.sample_type = AudioConfig_pb2.AudioConfig.SAMPLE_S16LE
+        message.config.audio_config.channels = AudioConfig_pb2.AudioConfig.MONO
+        message.config.identifier_config.mode = IdentifierConfig_pb2.SEGMENTATION
+        message.config.identifier_config.locales.extend(self.request.candidate_languages)
+        with wave.open(audio_file, 'rb') as fd:
+            # Determine the actual frame rate.
+            framerate = fd.getframerate()
+            if framerate == 16000:
+                message.config.audio_config.sample_rate = AudioConfig_pb2.AudioConfig.SAMPLE_16KHZ
+            else:
+                message.config.audio_config.sample_rate = AudioConfig_pb2.AudioConfig.SAMPLE_8KHZ
+            yield message
+
+            # Any number of audio payload messages follow the config message.
+            while True:
+                # If request has been canceled by framework, we will simply stop producing
+                # the request message stream and allow the response reader to throw the CancellationTokenException.
+                if cancellation_token.is_set():
+                    break
+                b = fd.readframes(2048)
+                if not b:
+                    break
+                message.audio_payload = b
+                yield message
 
     def get_cached_result(self, audio_file, dirs: List[str]):
         """
