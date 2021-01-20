@@ -25,10 +25,9 @@ from batchkit_examples.speech_sdk.audio import init_gstreamer, convert_audio, Wa
 from .work_item import LangIdWorkItemRequest, LangIdWorkItemResult
 from .endpoint_status import LangIdEndpointStatusChecker
 
-from batchkit_examples.speech_sdk.lang_id.proto import (
-    LanguageIdRpc_pb2, LanguageIdRpc_pb2_grpc, LIDRequestMessage_pb2,
-    LIDConfigMessage_pb2, AudioConfig_pb2, IdentifierConfig_pb2, IdentificationCompletedMessage_pb2,
-    LIDResponseMessage_pb2, FinalResultMessage_pb2
+from . import pb2
+from .pb2 import (
+    LIDRequestMessage, AudioConfig, LanguageIdStub, IdentifierConfig_pb2, IdentifierConfig, FinalResultMessage
 )
 
 
@@ -171,7 +170,7 @@ class FileRecognizer:
         # Check that this endpoint is actually healthy.
         address, port = self._host.split(":")
         if not LangIdEndpointStatusChecker(self._log_event_queue). \
-                check_endpoint(address, port, False, False):
+                check_endpoint(address, int(port), False, False):
             raise EndpointDownError("Target {0} in process {1} failed.".format(self._host, current_process().name))
 
         # Prepare to fork off the work to a child proc for isolation
@@ -251,6 +250,12 @@ class FileRecognizer:
             self._validate_file_format(self._converted_audio_file)
 
             lang_segments = self._segment(self._converted_audio_file, cancellation_token)
+
+            # Corner case: when there is only a single language segment of language "unknown", the LID
+            # backend has absolutely no idea how to even make a homogeneous language estimate. In this case
+            # we would rather naively assume some language.
+            if len(lang_segments) == 1 and 'unknown' in lang_segments[0][0].lower():
+                lang_segments[0][0] = 'en-us'
         except:
             # While processing we could get a FailedRecognitionError, CancellationTokenException,
             # or other unexpected exceptions. Upstream decides whether to retry, but we need to at least
@@ -300,18 +305,15 @@ class FileRecognizer:
 
     def _segment(self, audio_file: str, cancellation_token: multiprocessing.Event):
         channel = grpc.insecure_channel(self._host)
-        stub = LanguageIdRpc_pb2_grpc.LanguageIdStub(channel)
+        stub = LanguageIdStub(channel)
         segments = []
 
         for resp in stub.Identify(self._generate_messages(audio_file, cancellation_token)):
-
-
-
             if resp.WhichOneof('message') == 'final_result':
-                response: FinalResultMessage_pb2 = resp.final_result
+                response: FinalResultMessage = resp.final_result
                 self._log_event_queue.debug("Segment identified for file {0}: {1}".format(audio_file, response))
                 segments.append([
-                    response.language,
+                    response.locale,
                     float(response.start_offset_ms) / 1000.0,
                     float(response.end_offset_ms) / 1000.0
                 ])
@@ -339,7 +341,8 @@ class FileRecognizer:
             # Currently only compatible with 8kHz or 16kHz.
             framerate = fd.getframerate()
             if framerate not in [8000, 16000]:
-                raise InvalidAudioFormatError("LID currently only compatible with 8kHz or 16kHz framerate.")
+                raise InvalidAudioFormatError(
+                    "LID currently only compatible with 8kHz or 16kHz framerate. Given: {0}".format(framerate))
 
             # Currently only compatible with 16-bit samples.
             sampwidth = fd.getsampwidth()
@@ -350,19 +353,19 @@ class FileRecognizer:
         self._validate_file_format(audio_file)
 
         # Config message first.
-        message = LIDRequestMessage_pb2.LIDRequestMessage()
-        message.config.audio_config.encoding = AudioConfig_pb2.AudioConfig.PCM
-        message.config.audio_config.sample_type = AudioConfig_pb2.AudioConfig.SAMPLE_S16LE
-        message.config.audio_config.channels = AudioConfig_pb2.AudioConfig.MONO
+        message = LIDRequestMessage()
+        message.config.audio_config.encoding = AudioConfig.PCM
+        message.config.audio_config.sample_type = AudioConfig.SAMPLE_S16LE
+        message.config.audio_config.channels = AudioConfig.MONO
         message.config.identifier_config.mode = IdentifierConfig_pb2.SEGMENTATION
         message.config.identifier_config.locales.extend(self.request.candidate_languages)
         with wave.open(audio_file, 'rb') as fd:
             # Determine the actual frame rate.
             framerate = fd.getframerate()
             if framerate == 16000:
-                message.config.audio_config.sample_rate = AudioConfig_pb2.AudioConfig.SAMPLE_16KHZ
+                message.config.audio_config.sample_rate = AudioConfig.SAMPLE_16KHZ
             else:
-                message.config.audio_config.sample_rate = AudioConfig_pb2.AudioConfig.SAMPLE_8KHZ
+                message.config.audio_config.sample_rate = AudioConfig.SAMPLE_8KHZ
             yield message
 
             # Any number of audio payload messages follow the config message.
