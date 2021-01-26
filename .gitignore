@@ -10,7 +10,9 @@ batchkit/__pycache__/
 batchkit_examples/__pycache__/
 batchkit_examples/speech_sdk/__pycache__/
 batchkit_examples/speech_sdk/lang_id/__pycache__/
+batchkit_examples/speech_sdk/lang_id/proto/__pycache__/
 tests/__pycache__/
+venv/
 
 # PyCharm associated
 .idea/
