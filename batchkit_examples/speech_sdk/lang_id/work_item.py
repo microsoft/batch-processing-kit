@@ -2,7 +2,9 @@
 # Licensed under the MIT License.
 
 import multiprocessing
+from multiprocessing import current_process
 from typing import List, Optional
+import traceback
 
 from batchkit.logger import LogEventQueue
 from batchkit.work_item import WorkItemRequest, WorkItemResult
@@ -29,7 +31,29 @@ class LangIdWorkItemRequest(WorkItemRequest):
 
     def process_impl(self, endpoint_config: dict, rtf: float,
                      log_event_queue: LogEventQueue, cancellation_token: multiprocessing.Event):
-        from .classify import run_classifier
+
+        # WORKAROUND: Rare race condition in protobuf library produces ImportError when multiple
+        # processes import concurrently. We will allow burning of a retry.
+        try:
+            from .classify import run_classifier
+        except ImportError as err:
+            tb = traceback.format_exc()
+            log_event_queue.warning("{0}: encountered {1}:\n{2}".format(
+                type(self).__name__, type(err).__name__, tb))
+            return LangIdWorkItemResult(
+                self,
+                False,
+                endpoint_config["host"],
+                0,
+                1,
+                current_process().name,
+                True,
+                False,
+                0,
+                type(err).__name__,
+                "Transient ImportError due to protobuf bug.",
+            )
+
         return run_classifier(
             self,
             rtf,
