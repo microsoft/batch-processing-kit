@@ -19,4 +19,5 @@ from AudioConfig_pb2 import AudioConfig
 from LanguageIdRpc_pb2_grpc import LanguageIdStub
 import IdentifierConfig_pb2
 from IdentifierConfig_pb2 import IdentifierConfig
+from IdentificationCompletedMessage_pb2 import IdentificationCompletedMessage
 from FinalResultMessage_pb2 import FinalResultMessage

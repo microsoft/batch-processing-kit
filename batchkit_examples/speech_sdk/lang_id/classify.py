@@ -27,7 +27,8 @@ from .endpoint_status import LangIdEndpointStatusChecker
 
 from . import pb2
 from .pb2 import (
-    LIDRequestMessage, AudioConfig, LanguageIdStub, IdentifierConfig_pb2, IdentifierConfig, FinalResultMessage
+    LIDRequestMessage, AudioConfig, LanguageIdStub, IdentifierConfig_pb2, IdentifierConfig, FinalResultMessage,
+    IdentificationCompletedMessage
 )
 
 
@@ -255,8 +256,7 @@ class FileRecognizer:
             # backend has absolutely no idea how to even make a homogeneous language estimate. In this case
             # we would rather naively assume some language.
             if len(lang_segments) == 1 and 'unknown' in lang_segments[0][0].lower():
-                lang_segments[0][0] = 'en-us' if 'en-us' in self.request.candidate_languages \
-                    else self.request.candidate_languages[0]
+                lang_segments[0][0] = self.request.candidate_languages[0]
         except:
             # While processing we could get a FailedRecognitionError, CancellationTokenException,
             # or other unexpected exceptions. Upstream decides whether to retry, but we need to at least
@@ -319,8 +319,19 @@ class FileRecognizer:
                     float(response.end_offset_ms) / 1000.0
                 ])
             elif resp.WhichOneof('message') == 'identification_completed':
-                self._log_event_queue.debug(
-                    "LID service finished segmenting file {0}: {1}".format(audio_file, resp))
+                response: IdentificationCompletedMessage = resp.identification_completed
+                if response.end_reason == IdentificationCompletedMessage.ERROR:
+                    self._log_event_queue.warning(
+                        "LID service had internal error while processing file {0}: {1}".format(audio_file, response))
+                    # TODO(andwald): Can output results we did get thus far and enable picking up progress in retry.
+                    raise FailedRecognitionError("LID service internal error.")
+                elif response.end_reason == IdentificationCompletedMessage.AUDIOEND:
+                    self._log_event_queue.info(
+                        "LID service finished segmenting file {0}: {1}".format(audio_file, response))
+                else:
+                    self._log_event_queue.info(
+                        "LID service returned unexpected end reason for file {0}: {1}".format(audio_file, response))
+                    raise FailedRecognitionError("LID service unexpected end reason: {0}.".format(response))
 
             # Before going to next msg, check for cancellation.
             if cancellation_token.is_set():
