@@ -32,7 +32,7 @@ class LangIdEndpointStatusChecker(EndpointStatusChecker):
 
         # Now `host` is an ipaddr.
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(3.0)
+            s.settimeout(10.0)
             try:
                 s.connect((host, port))
             except socket.timeout as e:
