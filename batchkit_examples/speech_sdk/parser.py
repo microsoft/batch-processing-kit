@@ -4,6 +4,7 @@
 import argparse
 from argparse import Namespace
 import os
+import tempfile
 
 
 def check_positive(value):
@@ -79,7 +80,7 @@ def create_parser():
         required=False,
         help="[Optional] Scratch folder will be created if it doesn't"
              "exist and is cleaned on exit. If unspecified, a temporary"
-             "directory is used under --output-folder."
+             "directory is used under /tmp"
     )
     parser.add_argument(
         '-diarization', '--diarization-mode',
@@ -128,6 +129,6 @@ def parse_cmdline(args=None) -> Namespace:
         parser.error("argument -input_list/--input-list: not allowed if the run mode is not ONESHOT")
 
     if args.scratch_folder is None:
-        args.scratch_folder = os.path.join(args.output_folder, ".scratch")
+        args.scratch_folder = tempfile.mkdtemp()
 
     return args

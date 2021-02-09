@@ -9,10 +9,12 @@ from abc import ABC, abstractmethod
 import signal
 import os
 import multiprocessing
+from threading import Thread
 import logging
 from argparse import Namespace
 from collections import namedtuple
 from typing import Optional, List, Set, Callable
+import subprocess
 
 from .apiserver import ApiServer
 from . import constants
@@ -384,11 +386,42 @@ class DaemonClient(Client):
         self._is_success = True
         self._stop_evt = multiprocessing.Event()
 
+        # When running in daemon mode and using various network filesystems for the input
+        # directory, file change events (e.g. new work items) may not be triggered using
+        # posix inotify facility as a natural perf limitation of those network fs drivers.
+        # In these cases, periodic polling ensures (much higher latency) notification.
+        self._touchinput_thread = Thread(
+            target=self.periodic_inputdir_touch,
+            name="TouchInputDir_Thread",
+            daemon=True)
+
     def requires_flask_functional(self):
         return False
 
     def requires_flask_healthprobe(self):
         return True
+
+    def periodic_inputdir_touch(self):
+        try:
+            while True:
+                time.sleep(60)  # Hand-waived number motivated by overhead-latency tradeoff.
+                proc: subprocess.CompletedProcess = subprocess.run(
+                    ['find', self.settings.input_folder, '-type', 'f',
+                     '-exec', 'touch', '-a', '--no-create', '{}', ';'],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    universal_newlines=True,
+                    shell=False)
+                if proc.returncode == 0 and len(proc.stdout) == 0 and len(proc.stderr) == 0:
+                    self.log_queue.debug("Daemon-mode periodic input dir touch-polling completed an iteration.")
+                else:
+                    self.log_queue.error("{0}. Return code from `find`: {1}. Stdout: {2}\nStderr: {3}".format(
+                        "Daemon-mode periodic input dir touch-polling error.",
+                        proc.returncode,
+                        proc.stdout,
+                        proc.stderr))
+        except Exception as e:
+            self.log_queue.error("Touch-poll thread ending unexpectedly after exception: {0}".format(e.__repr__()))
 
     def run(self):
         """
@@ -397,6 +430,10 @@ class DaemonClient(Client):
         waiting for new files and submit whatever it finds, in addition
         to files that are present in the input directory initially.
         """
+        # Start periodic polling to guarantee daemon-mode file converage in nfs scenarios
+        # when inotify event-driven mechanism not available or unreliable.
+        self._touchinput_thread.start()
+
         # Function to be used for qualifying files in the input directory as valid work items.
         predicate: Callable[[str], bool] = \
             getattr(BatchRequest.find_type(self.batch_config), "is_valid_input_file")
