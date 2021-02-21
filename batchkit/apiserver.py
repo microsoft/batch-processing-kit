@@ -4,7 +4,7 @@
 import multiprocessing
 from http import HTTPStatus
 from threading import Thread
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 import logging
 
 from flask import Flask, Response, Blueprint, request
@@ -26,6 +26,11 @@ class ApiServer(object):
     The primary controller by which BatchRequests are submitted and queried for status.
     This can be consumed directly as a client object in consumer python apps or through
     the HTTP endpoints.
+
+    list() -> List[int]
+    GET /list
+        (if add_flask_functional=True)
+        Response body will contain a JSON list with all known batch ids.
 
     status(batch_id: int) -> BatchStatus
     GET /status?batch_id=<batch_id>
@@ -112,6 +117,9 @@ class ApiServer(object):
         self.submission_queue.put(req)
         return self.status(req.batch_id)
 
+    def list(self) -> List[int]:
+        return self.status_provider.list_batches()
+
     def status(self, batch_id: int) -> BatchStatus:
         return self.status_provider.status(batch_id)
 
@@ -144,6 +152,15 @@ class ApiServer(object):
         status = self.submit(req)
         response = Response(status=200)
         response.stream.write(status.serialize_json())
+        return response
+
+    def _list_controller(self):
+        """
+        HTTP wrapper around list()
+        """
+        logger.info("[GET] /list")
+        response = Response(status=200)
+        response.stream.write(self.list())
         return response
 
     def _status_controller(self):
@@ -225,6 +242,7 @@ class ApiServer(object):
         """
         self.flask_app.add_url_rule('/submit', 'submit', self._submit_controller, methods=["POST"])
         self.flask_app.add_url_rule('/status', 'status', self._status_controller, methods=["GET"])
+        self.flask_app.add_url_rule('/list', 'list', self._list_controller, methods=["GET"])
         self.flask_app.add_url_rule('/watch', 'watch', self._watch_controller, methods=["GET"])
         self.flask_app.register_error_handler(Exception, self._code_exception)
 

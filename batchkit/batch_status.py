@@ -24,6 +24,7 @@ class BatchStatusEnum(Enum):
     waiting = 0
     running = 1
     done = 2
+    deleted = 3
 
 
 class BatchStatus(object):
@@ -161,6 +162,15 @@ class BatchStatusProvider(object):
         return [os.path.join(self.scratch, d) for d in os.listdir(self.scratch)
                 if os.path.isdir(os.path.join(self.scratch, d))
                 and self.associated_batch_id(d + "/.") != -1]
+
+    def list_batches(self) -> List[int]:
+        """
+        Return a list of all the batch ids.
+        """
+        ids = [self.associated_batch_id(d + "/.")
+               for d in os.listdir(self.scratch)
+               if os.path.isdir(os.path.join(self.scratch, d))]
+        return [_ for _ in ids if _ != -1]
 
     def rm_batch(self, batch_id: int):
         """
