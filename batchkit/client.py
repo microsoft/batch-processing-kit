@@ -174,7 +174,7 @@ class Client(ABC):
 
         # Top-level composition of all components.
         self.submission_queue = multiprocessing.Queue()
-        self.status_provider = BatchStatusProvider(settings.scratch_folder)
+        self.status_provider = BatchStatusProvider(settings.scratch_folder, log_queue)
 
         self.orchestrator = Orchestrator(
             self.submission_queue,
@@ -201,6 +201,7 @@ class Client(ABC):
             self.submission_queue,
             self.status_provider,
             self.orchestrator.cancel_running_batch,
+            log_queue,
             self.requires_flask_functional(),
             self.requires_flask_healthprobe(),
             self.settings.apiserver_port,

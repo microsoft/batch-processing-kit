@@ -3,10 +3,6 @@
 
 from abc import ABC, abstractmethod
 from argparse import Namespace
-import logging
-
-
-logger = logging.getLogger("batch")
 
 
 class BatchConfig(ABC):

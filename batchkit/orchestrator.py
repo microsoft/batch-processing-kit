@@ -26,8 +26,6 @@ from .run_summarizer import BatchRunSummarizer
 from .work_item import WorkItemResult, WorkItemRequest, SentinelWorkItemRequest
 from .constants import ORCHESTRATOR_SCOPE_MAX_RETRIES, RUN_SUMMARY_LOOP_INTERVAL, DEBUG_LOOP_INTERVAL
 
-logger = logging.getLogger("batch")
-
 
 class Orchestrator:
     def __init__(self, submission_queue: multiprocessing.Queue, status_provider: BatchStatusProvider,
@@ -90,7 +88,7 @@ class Orchestrator:
 
         self._start_time = time.time()
         self._creator_pid = current_process().pid
-        logger.info("Orchestrator created by process: {0}".format(self._creator_pid))
+        self._log_event_que.info("Orchestrator created by process: {0}".format(self._creator_pid))
         self.__cnt_work_success_cb = 0
         self.__cnt_work_failure_cb = 0
 
@@ -119,9 +117,9 @@ class Orchestrator:
                 # Log and re-try. Repetitive failure loop will at least get logged.
                 except Exception as e:
                     exception_details = traceback.format_exc()
-                    logger.error("Orchestrator: run_summary_thread in run_summary_loop(): "
-                                 "Caught {0}, \nDetails: {1}".format(
-                                    type(e).__name__, exception_details))
+                    self._log_event_que.error("Orchestrator: run_summary_thread in run_summary_loop(): "
+                                              "Caught {0}, \nDetails: {1}".format(
+                                                type(e).__name__, exception_details))
 
             time.sleep(RUN_SUMMARY_LOOP_INTERVAL)
 
@@ -140,6 +138,7 @@ class Orchestrator:
         # Loop forever. This is a daemonic thread and it will intentionally
         # only die when the process owning Orchestrator dies.
         last_cnt_work_success = 0
+        logger = self._log_event_que
         while True:
             logger.debug("Stop requested: {0}".format(self._stop_requested))
             logger.debug("Batch que size: {0}".format(self._submission_que.qsize()))
@@ -212,7 +211,8 @@ class Orchestrator:
             if write_run_summary:
                 try:
                     if self._singleton_run_summary_path:
-                        logger.debug("Updating singleton run_summary: {0}".format(self._singleton_run_summary_path))
+                        self._log_event_que.debug(
+                            "Updating singleton run_summary: {0}".format(self._singleton_run_summary_path))
                         write_json_file_atomic(summary_json, self._singleton_run_summary_path)
                     else:
                         try:
@@ -224,7 +224,7 @@ class Orchestrator:
                     # Minimal throttle on file writes. We are under _run_summary_lock.
                     time.sleep(3)
                 except Exception as e:
-                    logger.warning("Failed to write run_summary: {0}".format(str(e)))
+                    self._log_event_que.warning("Failed to write run_summary: {0}".format(str(e)))
                     if not allow_fail:
                         raise
 
@@ -455,7 +455,7 @@ class Orchestrator:
             # We report it in the logs and somewhere else we will die if no forward progress for too long.
             except Exception as e:
                 exception_details = traceback.format_exc()
-                logger.error("Caught Exception '{0}' reading config. Details: {1}\n{2}".format(
+                self._log_event_que.error("Caught Exception '{0}' reading config. Details: {1}\n{2}".format(
                     type(e).__name__, str(e), exception_details))
                 # Don't proceed to stop the old EndpointManagers because they're all we've got to go on.
                 return
@@ -504,7 +504,7 @@ class Orchestrator:
             for m in self._endpoint_managers:
                 m.set_endpoint_status_checker(ep_status_checker)
 
-        logger.info("Set new EndpointManagers after hot-swap: {0}".format(config_data))
+        self._log_event_que.info("Set new EndpointManagers after hot-swap: {0}".format(config_data))
 
     def _master_finalize(self):
         """
@@ -525,7 +525,8 @@ class Orchestrator:
 
             # Ensure the batch was not canceled (deleted during waiting state).
             if request and self._status_provider.is_deleted(request.batch_id):
-                logger.info("Orchestrator: Skipping batch {0} because it was marked deleted.".format(request.batch_id))
+                self._log_event_que.info(
+                    "Orchestrator: Skipping batch {0} because it was marked deleted.".format(request.batch_id))
                 continue
 
             # Recreate the endpoints on start of a new batch in case
@@ -544,7 +545,7 @@ class Orchestrator:
                     self._work_results = {}
                 self._summarizer = request.get_batch_run_summarizer()
 
-                logger.info("Orchestrator: Starting batch {0}".format(request.batch_id))
+                self._log_event_que.info("Orchestrator: Starting batch {0}".format(request.batch_id))
                 self._on_batch_id = request.batch_id
                 self._batch_completion_evt.clear()
                 self._run_summary_thread_gate.set()
@@ -576,9 +577,9 @@ class Orchestrator:
             # Check if the batch was completed due to deletion (canceled).
             canceled = self._status_provider.is_deleted(request.batch_id)
             if canceled:
-                logger.info("Orchestrator: Canceled processing batch: {0}".format(request.batch_id))
+                self._log_event_que.info("Orchestrator: Canceled processing batch: {0}".format(request.batch_id))
             else:
-                logger.info("Orchestrator: Completed batch {0}".format(request.batch_id))
+                self._log_event_que.info("Orchestrator: Completed batch {0}".format(request.batch_id))
 
             # Report per-batch final run_summary.
             if self._singleton_run_summary_path is None:
@@ -590,7 +591,8 @@ class Orchestrator:
 
             # Concatenate batch-level results to single file.
             if not canceled and request.combine_results:
-                logger.info("Orchestrator: Concatenating batch results to single file (combine_results option).")
+                self._log_event_que.info(
+                    "Orchestrator: Concatenating batch results to single file (combine_results option).")
                 write_single_output_json(
                     request.files,
                     self._status_provider.batch_base_path(request.batch_id)
@@ -604,7 +606,7 @@ class Orchestrator:
                     self._status_provider.delete_batch(request.batch_id)
                 else:
                     self._status_provider.change_status_enum(request.batch_id, BatchStatusEnum.done)
-                    logger.info("Orchestrator: Updated batch status to Done: {0}".format(request.batch_id))
+                    self._log_event_que.info("Orchestrator: Updated batch status to Done: {0}".format(request.batch_id))
 
             # As another batch may not show up for a while (or never), stop the periodic
             # run summary thread since no new information to report.

@@ -11,13 +11,11 @@ import os
 from typing import List
 import jsonpickle
 import pyinotify
-import logging
 import re
 
 from .batch_request import BatchRequest
+from .logger import LogEventQueue
 from .utils import BatchNotFoundException, write_json_file_atomic
-
-logger = logging.getLogger("batch")
 
 
 class BatchStatusEnum(Enum):
@@ -57,8 +55,9 @@ class BatchStatusProvider(object):
     # as long as single module import before forking (or share same instance across forking).
     lock = multiprocessing.RLock()
 
-    def __init__(self, scratch: str):
+    def __init__(self, scratch: str, logger: LogEventQueue):
         self.scratch = scratch
+        self.logger = logger
 
         # The following are to facilitate batch watchers.
         # Lazy initialized for safety with multiproc forking.
@@ -201,7 +200,7 @@ class BatchStatusProvider(object):
         Delete a batch's path in the scratch space, including any results
         and run summary information. The batch will appear not to exist hereafter.
         """
-        logger.info("BatchStatusProvider: rm_batch(): Removing batch_id: {0}".format(batch_id))
+        self.logger.info("BatchStatusProvider: rm_batch(): Removing batch_id: {0}".format(batch_id))
 
         path = self.batch_base_path(batch_id)
         shutil.rmtree(path, ignore_errors=True)

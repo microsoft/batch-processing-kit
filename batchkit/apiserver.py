@@ -11,10 +11,9 @@ from flask import Flask, Response, Blueprint, request
 
 from .batch_request import BatchRequest
 from .batch_status import BatchStatusProvider, BatchStatus, BatchStatusEnum
+from .logger import LogEventQueue
 from .utils import BadRequestError, BatchNotFoundException
 
-
-logger = logging.getLogger("batch")
 
 flask_app_name = 'batch_apiserver'
 flask_module_name = '__batch_apiserver__'
@@ -66,7 +65,7 @@ class ApiServer(object):
 
     watch(batch_id: int, target_state: BatchStatusEnum) -> BatchStatus
         (Blocking)
-    GET /watch?batch_id=<batch_id>&target_state=<waiting|running|done>
+    GET /watch?batch_id=<batch_id>&target_state=<waiting|running|done>[&timeout=<secs_float>]
         (if add_flask_functional=True)
         (HTTP Long Poll)
         Identical to status() but will block until there is change in status
@@ -86,6 +85,7 @@ class ApiServer(object):
             submission_queue: multiprocessing.Queue,
             status_provider: BatchStatusProvider,
             cancel_running_batch_callback: Callable[[int], bool],
+            logger: LogEventQueue,
             add_flask_functional: bool = True,
             add_flask_probe: bool = True,
             port: int = 5000):
@@ -103,6 +103,7 @@ class ApiServer(object):
         self.submission_queue = submission_queue
         self.status_provider = status_provider
         self.cancel_running_batch_callback = cancel_running_batch_callback
+        self.logger = logger
         if add_flask_probe or add_flask_functional:
             self.flask_app = Flask(flask_app_name)
             if add_flask_functional:
@@ -126,7 +127,7 @@ class ApiServer(object):
         """
         Submit a new job.
         """
-        logger.info(
+        self.logger.info(
             "ApiServer: submit() request:  {0}".format(req.serialize_json())
         )
         self.status_provider.new_batch(req)
@@ -151,7 +152,7 @@ class ApiServer(object):
         returning without reaching the target state, in which case the consumer must check
         the returned BatchStatus.
         """
-        logger.info(
+        self.logger.info(
             "ApiServer: watch() request:  batch_id: {0}, target_state: {1}, timeout: {2}".format(
                 batch_id, target_state, timeout
             )
@@ -167,9 +168,9 @@ class ApiServer(object):
         :returns: json-serialized BatchStatus of the newly submitted batch
         """
         body = request.get_json(force=True, silent=False)
-        logger.info("ApiServer: Received [POST] /submit : {0}".format(body))
+        self.logger.info("ApiServer: Received [POST] /submit : {0}".format(body))
         req = BatchRequest.from_json(body)
-        logger.info("ApiServer: New Submission: {0}".format(req.serialize_json()))
+        self.logger.info("ApiServer: New Submission: {0}".format(req.serialize_json()))
         status = self.submit(req)
         response = Response(status=200)
         response.stream.write(status.serialize_json())
@@ -179,9 +180,9 @@ class ApiServer(object):
         """
         HTTP wrapper around list()
         """
-        logger.info("[GET] /list")
+        self.logger.info("[GET] /list")
         response = Response(status=200)
-        response.stream.write(self.list())
+        response.stream.write(self.list().__repr__())
         return response
 
     def _status_controller(self):
@@ -189,9 +190,9 @@ class ApiServer(object):
         HTTP wrapper around status()
         """
         batch_id = self._id_from_request()
-        logger.info("[GET] /status : {0}".format(batch_id))
+        self.logger.info("[GET] /status : {0}".format(batch_id))
         response = Response(status=200)
-        response.stream.write(self.status(batch_id))
+        response.stream.write(self.status(batch_id).serialize_json())
         return response
 
     def _delete_controller(self):
@@ -199,7 +200,7 @@ class ApiServer(object):
         HTTP wrapper around delete()
         """
         batch_id = self._id_from_request()
-        logger.info("[PUT] /delete : {0}".format(batch_id))
+        self.logger.info("[PUT] /delete : {0}".format(batch_id))
         response = Response(status=200)
         response.stream.write(self.delete(batch_id))
         return response
@@ -209,7 +210,7 @@ class ApiServer(object):
         HTTP wrapper around watch()
         """
         batch_id = self._id_from_request()
-        logger.info("[GET] /watch : {0}".format(batch_id))
+        self.logger.info("[GET] /watch : {0}".format(batch_id))
         try:
             target_state: BatchStatusEnum = self._target_state_from_request()
             timeout: Optional[float] = self._timeout_from_request()
@@ -218,7 +219,7 @@ class ApiServer(object):
             response.stream.write(status.serialize_json())
             return response
         except BadRequestError as err:
-            logger.warning("Bad request to /watch : {0}".format(str(err)))
+            self.logger.warning("Bad request to /watch : {0}".format(str(err)))
 
     def _ready_controller(self):
         """
