@@ -202,7 +202,7 @@ class ApiServer(object):
         batch_id = self._id_from_request()
         self.logger.info("[PUT] /delete : {0}".format(batch_id))
         response = Response(status=200)
-        response.stream.write(self.delete(batch_id))
+        response.stream.write(self.delete(batch_id).serialize_json())
         return response
 
     def _watch_controller(self):

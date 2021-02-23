@@ -291,6 +291,9 @@ class Orchestrator:
                 self._file_queue.get()
                 self._file_queue_size -= 1
             self._file_queue_cond.notify_all()
+            # Drain anything we were tracking as in progress.
+            self._in_progress.clear()
+            self._in_progress_owner.clear()
             # Have EndpointManagers cancel current work items (activate work item cancellation tokens).
             # These EndpointManagers will be terminally destroyed but would be re-created for a new batch.
             for m in self._endpoint_managers:
