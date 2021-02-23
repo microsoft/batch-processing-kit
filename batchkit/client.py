@@ -176,14 +176,6 @@ class Client(ABC):
         self.submission_queue = multiprocessing.Queue()
         self.status_provider = BatchStatusProvider(settings.scratch_folder)
 
-        self.apiserver = ApiServer(
-            self.submission_queue,
-            self.status_provider,
-            self.requires_flask_functional(),
-            self.requires_flask_healthprobe(),
-            self.settings.apiserver_port,
-        )
-
         self.orchestrator = Orchestrator(
             self.submission_queue,
             self.status_provider,
@@ -204,6 +196,16 @@ class Client(ABC):
             # in nature or reported per-batch.
             self._singleton_run_summary_path(),
         )
+
+        self.apiserver = ApiServer(
+            self.submission_queue,
+            self.status_provider,
+            self.orchestrator.cancel_running_batch,
+            self.requires_flask_functional(),
+            self.requires_flask_healthprobe(),
+            self.settings.apiserver_port,
+        )
+
 
     @abstractmethod
     def _singleton_run_summary_path(self) -> Optional[str]:

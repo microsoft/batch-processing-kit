@@ -107,6 +107,30 @@ class BatchStatusProvider(object):
             with open(self._status_path(batch_id), 'r') as f:
                 return BatchStatusEnum[f.readline()]
 
+    def is_deleted(self, batch_id: int) -> bool:
+        with BatchStatusProvider.lock:
+            return self.status_enum(batch_id) == BatchStatusEnum.deleted
+
+
+    def delete_batch(self, batch_id: int) -> BatchStatus:
+        with BatchStatusProvider.lock:
+            self.change_status_enum(batch_id, BatchStatusEnum.deleted)
+
+            # Make best-effort to delete result files.
+            batch_path = self.batch_base_path(batch_id)
+            status_path = os.path.abspath(self._status_path(batch_id))
+            for f in os.listdir(batch_path):
+                fullpath = os.path.abspath(os.path.join(batch_path, f))
+                if fullpath != status_path and os.path.isfile(fullpath):
+                    try:
+                        os.unlink(fullpath)
+                    except OSError:
+                        # Silently swallow the file deletion error. It just means user
+                        # will see some leftovers when deleting the batch.
+                        pass
+
+            return self.status(batch_id)
+
     def set_run_summary(self, batch_id: int, run_summary: {}):
         """
         Update the run summary for a batch.
@@ -264,5 +288,3 @@ class BatchStatusProvider(object):
             self._notifier.daemon = True
             self._notifier.name = "BatchStatusChangeHandlerThread"
             self._notifier.start()
-
-
