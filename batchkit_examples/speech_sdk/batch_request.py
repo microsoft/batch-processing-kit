@@ -49,22 +49,28 @@ class SpeechSDKBatchRequest(BatchRequest):
 
     @staticmethod
     def from_json(json: dict):
-        # String args.
+        # Ensure all the args are present.
         for arg in ['files', 'language', 'diarization', 'nbest',
                     'profanity', 'allow_resume', 'sentiment',
                     'combine_results']:
             if arg not in json:
                 raise BadRequestError("Missing '{arg}' argument (string) in request body".format(arg=arg))
+        # Integer args.
+        for arg in ['nbest']:
+            if not isinstance(json[arg], int):
+                raise BadRequestError("Request body argument '{0}' was not an integer: '{1}'".format(arg, json[arg]))
         # Boolean args.
         for arg in ['allow_resume', 'sentiment', 'combine_results']:
-            if str.lower(str(arg)) not in [True, False]:
+            if str.lower(str(json[arg])) not in ["true", "false"]:
                 raise BadRequestError("'{arg}' argument needs boolean in request body".format(arg=arg))
+            json[arg] = BatchRequest.to_bool(json[arg])
+        # File List arg.
         if not isinstance(json['files'], list) or \
                 not all([isinstance(x, str) for x in json['files']]):
             raise BadRequestError("Request body argument 'files' was not List[str]")
         return SpeechSDKBatchRequest(json['files'], json['language'], json['diarization'],
-                                     json['nbest'], json['profanity'], bool(json['allow_resume']),
-                                     bool(json['sentiment']), bool(json['combine_results']))
+                                     json['nbest'], json['profanity'], json['allow_resume'],
+                                     json['sentiment'], json['combine_results'])
 
     @staticmethod
     def from_config(files: List[str], config: SpeechSDKBatchConfig):

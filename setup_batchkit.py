@@ -31,7 +31,7 @@ for line in required:
 # Package specification for batchkit library.
 setup(
     name='batchkit',
-    version='0.9.8.dev0',
+    version='0.9.9.dev0',
     author='Microsoft Azure',
     author_email='andwald@microsoft.com',
     description="Generic batch processing framework for managing the orchestration, dispatch, fault tolerance, and "

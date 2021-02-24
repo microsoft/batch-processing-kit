@@ -4,17 +4,16 @@
 import multiprocessing
 from http import HTTPStatus
 from threading import Thread
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List, Callable
 import logging
 
 from flask import Flask, Response, Blueprint, request
 
 from .batch_request import BatchRequest
 from .batch_status import BatchStatusProvider, BatchStatus, BatchStatusEnum
+from .logger import LogEventQueue
 from .utils import BadRequestError, BatchNotFoundException
 
-
-logger = logging.getLogger("batch")
 
 flask_app_name = 'batch_apiserver'
 flask_module_name = '__batch_apiserver__'
@@ -27,6 +26,12 @@ class ApiServer(object):
     This can be consumed directly as a client object in consumer python apps or through
     the HTTP endpoints.
 
+    list() -> List[int]
+    GET /list
+        (if add_flask_functional=True)
+        Response body will contain a JSON list with all known batch ids.
+
+
     status(batch_id: int) -> BatchStatus
     GET /status?batch_id=<batch_id>
         (if add_flask_functional=True)
@@ -36,6 +41,15 @@ class ApiServer(object):
              'status': '<waiting|running|done>',
              'run_summary': ...,
              'results_path': ... }
+
+
+    delete(batch_id: int) -> BatchStatus
+    PUT /delete?batch_id=<batch_id>
+        (if add_flask_functional=True)
+        Request arg is the id of a previously submitted batch request to be deleted.
+        If the batch has not been processed yet or is in progress, it will be canceled.
+        All results will be removed from the batch's directory, if any.
+        Response body identical to status(batch_id) showing the batch is deleted.
 
 
     submit(req: BatchRequest) -> BatchStatus
@@ -51,11 +65,13 @@ class ApiServer(object):
 
     watch(batch_id: int, target_state: BatchStatusEnum) -> BatchStatus
         (Blocking)
-    GET /watch?batch_id=<batch_id>&target_state=<waiting|running|done>
+    GET /watch?batch_id=<batch_id>&target_state=<waiting|running|done>[&timeout=<secs_float>]
         (if add_flask_functional=True)
         (HTTP Long Poll)
         Identical to status() but will block until there is change in status
-        to `target_state` or beyond.
+        to `target_state` or beyond. For example, waiting for a batch status of
+        `running` would return once the batch is `running`, `done`, or `deleted`,
+        whichever happens first after the call.
 
 
     GET /health
@@ -68,6 +84,8 @@ class ApiServer(object):
             self,
             submission_queue: multiprocessing.Queue,
             status_provider: BatchStatusProvider,
+            cancel_running_batch_callback: Callable[[int], bool],
+            logger: LogEventQueue,
             add_flask_functional: bool = True,
             add_flask_probe: bool = True,
             port: int = 5000):
@@ -75,6 +93,8 @@ class ApiServer(object):
         Construct apiserver via dependency injection.
         :param submission_queue: Drop-point for new BatchRequests to be executed by downstream component.
         :param status_provider: Getter and setter for creating BatchRequests and querying their progress.
+        :param cancel_running_batch_callback: Delegate that apiserver can callback when it wishes to cancel
+                                              a batch that may currently be running for faster cancellation.
         :param add_flask_functional: whether to also run the http server for
                                      batch submission, querying (see class doc).
         :param add_flask_probe: whether to add http server for health probe endpoint.
@@ -82,6 +102,8 @@ class ApiServer(object):
         """
         self.submission_queue = submission_queue
         self.status_provider = status_provider
+        self.cancel_running_batch_callback = cancel_running_batch_callback
+        self.logger = logger
         if add_flask_probe or add_flask_functional:
             self.flask_app = Flask(flask_app_name)
             if add_flask_functional:
@@ -105,15 +127,23 @@ class ApiServer(object):
         """
         Submit a new job.
         """
-        logger.info(
+        self.logger.info(
             "ApiServer: submit() request:  {0}".format(req.serialize_json())
         )
         self.status_provider.new_batch(req)
         self.submission_queue.put(req)
         return self.status(req.batch_id)
 
+    def list(self) -> List[int]:
+        return self.status_provider.list_batches()
+
     def status(self, batch_id: int) -> BatchStatus:
         return self.status_provider.status(batch_id)
+
+    def delete(self, batch_id: int) -> BatchStatus:
+        new_status: BatchStatus = self.status_provider.delete_batch(batch_id)
+        self.cancel_running_batch_callback(batch_id)
+        return new_status
 
     def watch(self, batch_id: int, target_state: BatchStatusEnum, timeout: Optional[float] = None) -> BatchStatus:
         """
@@ -122,7 +152,7 @@ class ApiServer(object):
         returning without reaching the target state, in which case the consumer must check
         the returned BatchStatus.
         """
-        logger.info(
+        self.logger.info(
             "ApiServer: watch() request:  batch_id: {0}, target_state: {1}, timeout: {2}".format(
                 batch_id, target_state, timeout
             )
@@ -138,12 +168,21 @@ class ApiServer(object):
         :returns: json-serialized BatchStatus of the newly submitted batch
         """
         body = request.get_json(force=True, silent=False)
-        logger.info("ApiServer: Received [POST] /submit : {0}".format(body))
+        self.logger.info("ApiServer: Received [POST] /submit : {0}".format(body))
         req = BatchRequest.from_json(body)
-        logger.info("ApiServer: New Submission: {0}".format(req.serialize_json()))
+        self.logger.info("ApiServer: New Submission: {0}".format(req.serialize_json()))
         status = self.submit(req)
         response = Response(status=200)
         response.stream.write(status.serialize_json())
+        return response
+
+    def _list_controller(self):
+        """
+        HTTP wrapper around list()
+        """
+        self.logger.info("[GET] /list")
+        response = Response(status=200)
+        response.stream.write(self.list().__repr__())
         return response
 
     def _status_controller(self):
@@ -151,9 +190,19 @@ class ApiServer(object):
         HTTP wrapper around status()
         """
         batch_id = self._id_from_request()
-        logger.info("[GET] /status : {0}".format(batch_id))
+        self.logger.info("[GET] /status : {0}".format(batch_id))
         response = Response(status=200)
-        response.stream.write(self.status(batch_id))
+        response.stream.write(self.status(batch_id).serialize_json())
+        return response
+
+    def _delete_controller(self):
+        """
+        HTTP wrapper around delete()
+        """
+        batch_id = self._id_from_request()
+        self.logger.info("[PUT] /delete : {0}".format(batch_id))
+        response = Response(status=200)
+        response.stream.write(self.delete(batch_id).serialize_json())
         return response
 
     def _watch_controller(self):
@@ -161,7 +210,7 @@ class ApiServer(object):
         HTTP wrapper around watch()
         """
         batch_id = self._id_from_request()
-        logger.info("[GET] /watch : {0}".format(batch_id))
+        self.logger.info("[GET] /watch : {0}".format(batch_id))
         try:
             target_state: BatchStatusEnum = self._target_state_from_request()
             timeout: Optional[float] = self._timeout_from_request()
@@ -170,7 +219,7 @@ class ApiServer(object):
             response.stream.write(status.serialize_json())
             return response
         except BadRequestError as err:
-            logger.warning("Bad request to /watch : {0}".format(str(err)))
+            self.logger.warning("Bad request to /watch : {0}".format(str(err)))
 
     def _ready_controller(self):
         """
@@ -225,6 +274,8 @@ class ApiServer(object):
         """
         self.flask_app.add_url_rule('/submit', 'submit', self._submit_controller, methods=["POST"])
         self.flask_app.add_url_rule('/status', 'status', self._status_controller, methods=["GET"])
+        self.flask_app.add_url_rule('/delete', 'delete', self._delete_controller, methods=["PUT"])
+        self.flask_app.add_url_rule('/list', 'list', self._list_controller, methods=["GET"])
         self.flask_app.add_url_rule('/watch', 'watch', self._watch_controller, methods=["GET"])
         self.flask_app.register_error_handler(Exception, self._code_exception)
 

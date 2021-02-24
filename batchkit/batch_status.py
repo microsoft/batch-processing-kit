@@ -11,19 +11,18 @@ import os
 from typing import List
 import jsonpickle
 import pyinotify
-import logging
 import re
 
 from .batch_request import BatchRequest
+from .logger import LogEventQueue
 from .utils import BatchNotFoundException, write_json_file_atomic
-
-logger = logging.getLogger("batch")
 
 
 class BatchStatusEnum(Enum):
     waiting = 0
     running = 1
     done = 2
+    deleted = 3
 
 
 class BatchStatus(object):
@@ -56,8 +55,9 @@ class BatchStatusProvider(object):
     # as long as single module import before forking (or share same instance across forking).
     lock = multiprocessing.RLock()
 
-    def __init__(self, scratch: str):
+    def __init__(self, scratch: str, logger: LogEventQueue):
         self.scratch = scratch
+        self.logger = logger
 
         # The following are to facilitate batch watchers.
         # Lazy initialized for safety with multiproc forking.
@@ -105,6 +105,30 @@ class BatchStatusProvider(object):
             self.assert_batch_exists(batch_id)
             with open(self._status_path(batch_id), 'r') as f:
                 return BatchStatusEnum[f.readline()]
+
+    def is_deleted(self, batch_id: int) -> bool:
+        with BatchStatusProvider.lock:
+            return self.status_enum(batch_id) == BatchStatusEnum.deleted
+
+
+    def delete_batch(self, batch_id: int) -> BatchStatus:
+        with BatchStatusProvider.lock:
+            self.change_status_enum(batch_id, BatchStatusEnum.deleted)
+
+            # Make best-effort to delete result files.
+            batch_path = self.batch_base_path(batch_id)
+            status_path = os.path.abspath(self._status_path(batch_id))
+            for f in os.listdir(batch_path):
+                fullpath = os.path.abspath(os.path.join(batch_path, f))
+                if fullpath != status_path and os.path.isfile(fullpath):
+                    try:
+                        os.unlink(fullpath)
+                    except OSError:
+                        # Silently swallow the file deletion error. It just means user
+                        # will see some leftovers when deleting the batch.
+                        pass
+
+            return self.status(batch_id)
 
     def set_run_summary(self, batch_id: int, run_summary: {}):
         """
@@ -162,12 +186,21 @@ class BatchStatusProvider(object):
                 if os.path.isdir(os.path.join(self.scratch, d))
                 and self.associated_batch_id(d + "/.") != -1]
 
+    def list_batches(self) -> List[int]:
+        """
+        Return a list of all the batch ids.
+        """
+        ids = [self.associated_batch_id(d + "/.")
+               for d in os.listdir(self.scratch)
+               if os.path.isdir(os.path.join(self.scratch, d))]
+        return [_ for _ in ids if _ != -1]
+
     def rm_batch(self, batch_id: int):
         """
         Delete a batch's path in the scratch space, including any results
         and run summary information. The batch will appear not to exist hereafter.
         """
-        logger.info("BatchStatusProvider: rm_batch(): Removing batch_id: {0}".format(batch_id))
+        self.logger.info("BatchStatusProvider: rm_batch(): Removing batch_id: {0}".format(batch_id))
 
         path = self.batch_base_path(batch_id)
         shutil.rmtree(path, ignore_errors=True)
@@ -254,5 +287,3 @@ class BatchStatusProvider(object):
             self._notifier.daemon = True
             self._notifier.name = "BatchStatusChangeHandlerThread"
             self._notifier.start()
-
-

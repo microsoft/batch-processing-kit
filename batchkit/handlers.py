@@ -109,6 +109,7 @@ def update_work_on_directory_content_change(directory, queue, leq, predicate):
     # you may need to modify this setting on the host, since it cannot be modified inside Docker.
     # https://github.com/guard/listen/wiki/Increasing-the-amount-of-inotify-watchers
     # echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf && sudo sysctl -p
+    # echo fs.inotify.max_user_instances=524288 | sudo tee -a /etc/sysctl.conf && sudo sysctl -p
     wm = pyinotify.WatchManager()
     notifier = pyinotify.ThreadedNotifier(
         wm,

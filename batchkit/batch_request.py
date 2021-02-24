@@ -49,10 +49,14 @@ class BatchRequest(ABC):
             # Also known to be noisy:
             logging.getLogger("pip").setLevel(logging.WARNING)
 
-            for modinfo in pkgutil.walk_packages():
+            def skip(mod):
+                logger.warning("batch_request.py: find_subtypes():  skipping: {0}".format(mod))
+            for modinfo in pkgutil.walk_packages(onerror=skip):
                 if not modinfo.ispkg and "batch_request" in modinfo.name:
                     module = import_module(modinfo.name)
                     for elem_name in dir(module):
+                        if elem_name in ['sys']:
+                            continue
                         elem = getattr(module, elem_name)
                         if inspect.isclass(elem) and issubclass(elem, BatchRequest) and elem != BatchRequest:
                             subtypes.append(elem)
@@ -191,3 +195,7 @@ class BatchRequest(ABC):
         :return: boolean whether the file is a valid work item
         """
         pass
+
+    @staticmethod
+    def to_bool(bool_str: str) -> bool:
+        return bool_str in ["True", "true", "t", "T", "y", "Y", "yes", "Yes"]
