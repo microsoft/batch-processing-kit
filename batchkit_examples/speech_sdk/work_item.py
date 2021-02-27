@@ -1,8 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-
+import json
 import multiprocessing
 from typing import List, Optional
+import audioread
 
 from batchkit.logger import LogEventQueue
 from batchkit.work_item import WorkItemRequest, WorkItemResult
@@ -34,6 +35,7 @@ class SpeechSDKWorkItemRequest(WorkItemRequest):
         self.log_dir = log_dir
         self.allow_resume = allow_resume
         self.enable_sentiment = enable_sentiment
+        self._cached_duration = None
 
     def process_impl(self, endpoint_config: dict, rtf: float,
                      log_event_queue: LogEventQueue, cancellation_token: multiprocessing.Event):
@@ -45,6 +47,38 @@ class SpeechSDKWorkItemRequest(WorkItemRequest):
             log_event_queue,
             cancellation_token
         )
+
+    # override
+    def priority(self) -> int:
+        """
+        Use the audio's duration as priority, such that longer audio files
+        commence processing first to potentially lower overall batch processing time.
+        If the duration cannot be fetched from the audio file's header, a default
+        priority of -1 is returned signifying the priority could not be determined.
+        """
+        try:
+            return int(self.duration() * 1000)
+        except Exception:
+            return -1
+
+    def duration(self) -> float:
+        """
+        Fetch the audio file duration in seconds.
+        """
+        if self._cached_duration:
+            return self._cached_duration
+        # Audio file segment ptr file is one kind of work item.
+        if self.filepath.endswith(".seg.json"):
+            with open(self.filepath, "r") as f:
+                meta = json.load(f)
+                start_offset_secs = float(meta["start_offset"])
+                end_offset_secs = float(meta["end_offset"])
+                self._cached_duration = end_offset_secs - start_offset_secs
+        # Regular audio file is the common kind of work item.
+        else:
+            with audioread.audio_open(self.filepath) as f:
+                self._cached_duration = f.duration
+        return self._cached_duration
 
 
 class SpeechSDKWorkItemResult(WorkItemResult):

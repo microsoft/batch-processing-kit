@@ -21,6 +21,7 @@ from . import constants
 from .batch_config import BatchConfig
 from .batch_request import BatchRequest
 from .batch_status import BatchStatusProvider, BatchStatusEnum, BatchStatus
+from .endpoint_config import load_configuration
 from .handlers import update_work_on_directory_content_change
 from .logger import setup_logging, LogEventQueue
 from .orchestrator import Orchestrator
@@ -127,6 +128,10 @@ def run(cmd_args: Namespace, batch_type: type):
     )
     ret = False
     try:
+        # Fail-fast early validation of the endpoint config file if strict validation.
+        if settings.strict_configuration_validation:
+            load_configuration(settings.config_file, strict_validation=True)
+
         ret = client.run()
     except Exception as e:
         exception_details = traceback.format_exc()
