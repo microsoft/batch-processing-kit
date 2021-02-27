@@ -257,7 +257,7 @@ class FileRecognizer:
             # we would rather naively assume some language.
             if len(lang_segments) == 1 and 'unknown' in lang_segments[0][0].lower():
                 lang_segments[0][0] = self.request.candidate_languages[0]
-        except:
+        except Exception as e:
             # While processing we could get a FailedRecognitionError, CancellationTokenException,
             # or other unexpected exceptions. Upstream decides whether to retry, but we need to at least
             # clean up before we bubble up the exception.
@@ -266,7 +266,16 @@ class FileRecognizer:
             self._log_event_queue.warning(
                 "A language segmentation attempt of file: {0} against endpoint: {1} on process: {2} has failed.".format(
                     self.request.filepath, self._host, current_process().name))
-            raise
+
+            # grpc errors are usually not picklable, so pull out the details.
+            if "Rendezvous" in type(e).__name__:
+                details = e.__str__()
+                if "details" in dir(e):
+                    details = "{0} {1}".format(details, e.details())  # noqa
+                raise FailedRecognitionError("grpc channel error: {0} {1}".format(type(e).__name__, details))
+            # Propagate any other exception through.
+            else:
+                raise e
 
         end_time = time.time()
         self._log_event_queue.info("Finished language segmentation on file: {0} -- {1}; wall time taken: {2}s".format(
