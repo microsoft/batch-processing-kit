@@ -102,13 +102,13 @@ class WorkItemQueue:
         else:
             pri = -1  # All negative priorities are treated equally (unknown priority).
             self.logger.warning(
-                "WorkItemQueue: Unable to determine priority for item: {0}."
+                "WorkItemQueue: Unable to determine priority for item: {0}. "
                 "Lowest priority presumed.".format(item.filepath))
 
-        heapq.heappush(self._arr, (-1 * pri, item))  # max priority queue from min heap
+        heapq.heappush(self._arr, (-1 * pri, id(item), item))  # max priority queue from min heap
 
     def get(self) -> WorkItemRequest:
-        return (heapq.heappop(self._arr))[1]
+        return (heapq.heappop(self._arr))[2]
 
 
 class WorkItemResult(ABC):

@@ -3,7 +3,8 @@
 import json
 import multiprocessing
 from typing import List, Optional
-import audioread
+import audiofile
+import os
 
 from batchkit.logger import LogEventQueue
 from batchkit.work_item import WorkItemRequest, WorkItemResult
@@ -67,6 +68,8 @@ class SpeechSDKWorkItemRequest(WorkItemRequest):
         """
         if self._cached_duration:
             return self._cached_duration
+        if not os.path.isfile(self.filepath):
+            raise FileNotFoundError("Cannot determine duration because file does not exist.")
         # Audio file segment ptr file is one kind of work item.
         if self.filepath.endswith(".seg.json"):
             with open(self.filepath, "r") as f:
@@ -76,8 +79,7 @@ class SpeechSDKWorkItemRequest(WorkItemRequest):
                 self._cached_duration = end_offset_secs - start_offset_secs
         # Regular audio file is the common kind of work item.
         else:
-            with audioread.audio_open(self.filepath) as f:
-                self._cached_duration = f.duration
+            self._cached_duration = audiofile.duration(self.filepath)
         return self._cached_duration
 
 
