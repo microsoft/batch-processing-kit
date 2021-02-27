@@ -406,6 +406,7 @@ class Orchestrator:
         except InvalidConfigurationError:
             self._log_event_que.error(
                 "Invalid endpoint configuration file: {0}. Overwrite for another hot-swap.".format(self._config_file))
+            return
 
         with self._accounting_lock:
             if self._stop_requested:
