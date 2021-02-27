@@ -2,9 +2,11 @@
 # Licensed under the MIT License.
 
 import multiprocessing
+import os
 from multiprocessing import current_process
 from typing import List, Optional
 import traceback
+import audiofile
 
 from batchkit.logger import LogEventQueue
 from batchkit.work_item import WorkItemRequest, WorkItemResult
@@ -28,6 +30,7 @@ class LangIdWorkItemRequest(WorkItemRequest):
         self.cache_search_dirs: List[str] = cache_search_dirs
         self.output_dir: str = output_dir
         self.log_dir: str = log_dir
+        self._cached_duration = None
 
     def process_impl(self, endpoint_config: dict, rtf: float,
                      log_event_queue: LogEventQueue, cancellation_token: multiprocessing.Event):
@@ -61,6 +64,30 @@ class LangIdWorkItemRequest(WorkItemRequest):
             log_event_queue,
             cancellation_token
         )
+
+    # override
+    def priority(self) -> int:
+        """
+        Use the audio's duration as priority, such that longer audio files
+        commence processing first to potentially lower overall batch processing time.
+        If the duration cannot be fetched from the audio file's header, a default
+        priority of -1 is returned signifying the priority could not be determined.
+        """
+        try:
+            return int(self.duration() * 1000)
+        except Exception:
+            return -1
+
+    def duration(self) -> float:
+        """
+        Fetch the audio file duration in seconds.
+        """
+        if self._cached_duration:
+            return self._cached_duration
+        if not os.path.isfile(self.filepath):
+            raise FileNotFoundError("Cannot determine duration because file does not exist.")
+        self._cached_duration = audiofile.duration(self.filepath)
+        return self._cached_duration
 
 
 class LangIdWorkItemResult(SpeechSDKWorkItemResult):
