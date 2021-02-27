@@ -20,4 +20,5 @@ psutil>=5.7.0
 ### examples
 # Needed only for stress tests and batchkit_examples/speech_sdk:
 # NOTE: Speech SDK v1.11.0 has a bug during broken session reconnection with SRFrontEnd; blacklisted
-azure-cognitiveservices-speech==1.10.0
+azure-cognitiveservices-speech==1.15.0
+audiofile

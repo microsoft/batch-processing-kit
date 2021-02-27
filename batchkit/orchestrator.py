@@ -20,10 +20,10 @@ from .endpoint_status import EndpointStatusChecker, UnknownEndpointStatusChecker
 from .handlers import notify_file_modified
 from .endpoint_config import load_configuration
 from .utils import write_json_file_atomic, write_single_output_json, \
-    current_threads_stacktrace, BatchNotFoundException
+    current_threads_stacktrace, BatchNotFoundException, InvalidConfigurationError
 from .logger import LogEventQueue
 from .run_summarizer import BatchRunSummarizer
-from .work_item import WorkItemResult, WorkItemRequest, SentinelWorkItemRequest
+from .work_item import WorkItemResult, WorkItemRequest, SentinelWorkItemRequest, WorkItemQueue
 from .constants import ORCHESTRATOR_SCOPE_MAX_RETRIES, RUN_SUMMARY_LOOP_INTERVAL, DEBUG_LOOP_INTERVAL
 
 
@@ -67,8 +67,8 @@ class Orchestrator:
         #               RTF and Concurrency, which is what this thread will manipulate.
         # self._perf_thread = Thread(target=self.perf_thread_loop, name="OrchestratorPerfThread", args=(self,), daemon=True)
 
-        self._file_queue = Queue()
-        self._file_queue_size = 0
+        self._file_queue: WorkItemQueue = WorkItemQueue(log_event_que)
+        self._file_queue_size: int = 0
         self._in_progress: Dict[str, WorkItemRequest] = {}  # WorkItemRequest.filepath -> WorkItemRequest
         self._in_progress_owner: Dict[str, EndpointManager] = {}  # WorkItemRequest.filepath -> EndpointManager
         self._work_results: Dict[str, WorkItemResult] = {}  # WorkItemRequest.filepath -> WorkItemResult
@@ -111,7 +111,7 @@ class Orchestrator:
 
             if self._on_batch_id > -1 and self._summarizer:
                 try:
-                    self.write_summary_information(write_run_summary=True, log_conclusion_msg=False)
+                    self.write_summary_information(write_run_summary=True, write_retries=5, log_conclusion_msg=False)
 
                 # Don't ever let this thread die as it's too important.
                 # Log and re-try. Repetitive failure loop will at least get logged.
@@ -171,6 +171,7 @@ class Orchestrator:
 
     def write_summary_information(self,
                                   write_run_summary: bool = True,
+                                  write_retries: int = 3,
                                   log_conclusion_msg: bool = False,
                                   allow_fail: bool = False):
         """
@@ -179,6 +180,7 @@ class Orchestrator:
         if requested.
         :param write_run_summary: whether run summary (individual files + overall)
                                   should be written to file.
+        :param write_retries: retries
         :param log_conclusion_msg: whether a conclusion message should be logged
                                    which includes final stats and lists failures.
         :param allow_fail: log failure to write run summary but do not raise exception.
@@ -213,7 +215,8 @@ class Orchestrator:
                     if self._singleton_run_summary_path:
                         self._log_event_que.debug(
                             "Updating singleton run_summary: {0}".format(self._singleton_run_summary_path))
-                        write_json_file_atomic(summary_json, self._singleton_run_summary_path)
+                        write_json_file_atomic(
+                            summary_json, self._singleton_run_summary_path, write_retries=write_retries)
                     else:
                         try:
                             self._status_provider.set_run_summary(snap_batch_id, summary_json)
@@ -398,7 +401,12 @@ class Orchestrator:
                 self._batch_completion_evt.set()
 
     def hotswap_endpoint_managers(self):
-        config_data = load_configuration(self._config_file, self._strict_config)
+        try:
+            config_data = load_configuration(self._config_file, self._strict_config)
+        except InvalidConfigurationError:
+            self._log_event_que.error(
+                "Invalid endpoint configuration file: {0}. Overwrite for another hot-swap.".format(self._config_file))
+            return
 
         with self._accounting_lock:
             if self._stop_requested:
@@ -586,11 +594,13 @@ class Orchestrator:
 
             # Report per-batch final run_summary.
             if self._singleton_run_summary_path is None:
-                self.write_summary_information(write_run_summary=True, log_conclusion_msg=True, allow_fail=True)
+                self.write_summary_information(
+                    write_run_summary=True, write_retries=10, log_conclusion_msg=True, allow_fail=True)
             # Even with singleton run_summary, we should update run_summary file
             # now but not log conclusion.
             else:
-                self.write_summary_information(write_run_summary=True, log_conclusion_msg=False, allow_fail=True)
+                self.write_summary_information(
+                    write_run_summary=True, write_retries=10, log_conclusion_msg=False, allow_fail=True)
 
             # Concatenate batch-level results to single file.
             if not canceled and request.combine_results:

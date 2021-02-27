@@ -101,21 +101,18 @@ def get_input_output_file_names(audio_file, output_folder):
     return audio_file_basename, json_file
 
 
-def write_json_file_atomic(final_json, json_file, rename_retries=3, log=True):
+def write_json_file_atomic(final_json, json_file, write_retries=3, log=True):
     json_file = os.path.abspath(json_file)
-    # Use same dir for temporary file as target to avoid any
-    # cross-device issue.
-    target_dir = os.path.dirname(json_file)
-    fd, tmp_filename = tempfile.mkstemp(dir=target_dir)
+    fd, tmp_filename = tempfile.mkstemp(prefix=os.path.basename(json_file))
     with os.fdopen(fd, 'w', encoding="utf-8") as outfile:
         outfile.write(json.dumps(final_json, indent=2, sort_keys=True, ensure_ascii=False))
     retries = 0  # of overwrites to path `json_file`
     error = None
-    while retries < rename_retries:
+    while retries < write_retries:
         if retries > 0:
             time.sleep(7)
         try:
-            _rename_impl(tmp_filename, json_file)
+            _move_file_impl(tmp_filename, json_file)
             if log:
                 logger.info("write_json_file_atomic():  Atomically wrote file {0}".format(json_file))
             return
@@ -123,7 +120,7 @@ def write_json_file_atomic(final_json, json_file, rename_retries=3, log=True):
             if log:
                 logger.warning(
                     "write_json_file_atomic(): Exception while renaming: {0} -> {1}. Details: {2} {3} Errno:{4}".format(
-                    tmp_filename, json_file, type(err).__name__, err.strerror, err.errno))
+                      tmp_filename, json_file, type(err).__name__, err.strerror, err.errno))
             error = err
             retries += 1
     # Here we were unable to do the overwrite.
