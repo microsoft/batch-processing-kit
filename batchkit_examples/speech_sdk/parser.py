@@ -132,6 +132,13 @@ def create_parser():
         help="Interval in seconds to re-log debug information about the batchkit's orchestration components. "
              "Useful for debugging. The default value of 0 means this information is not logged. "
     )
+    parser.add_argument(
+        '-max_segment_length', '--max-segment-length',
+        default=3600, type=check_positive,
+        help="[Applies when multiple --language given only]."
+             "Cap the maximum audio segment length produced during language segmentation. "
+             "Longer segments will be broken up into smaller ones. Unit: positive integer seconds."
+    )
     return parser
 
 
