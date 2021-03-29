@@ -17,9 +17,11 @@ import batchkit_examples.speech_sdk.audio as audio
 class LangIdBatchRequest(BatchRequest):
     def __init__(self,
                  files: List[str],
-                 languages: List[str]):
+                 languages: List[str],
+                 max_segment_length: int):
         super().__init__(files, False)
         self.languages: List[str] = languages
+        self.max_segment_length: int = max_segment_length
 
     def make_work_items(self, output_dir: str,
                         cache_search_dirs: List[str],
@@ -28,6 +30,7 @@ class LangIdBatchRequest(BatchRequest):
             LangIdWorkItemRequest(
                 f,
                 self.languages,
+                self.max_segment_length,
                 cache_search_dirs,
                 output_dir,
                 log_dir,
@@ -44,13 +47,20 @@ class LangIdBatchRequest(BatchRequest):
             if not isinstance(json[arg], list) or \
                     not all([isinstance(x, str) for x in json[arg]]):
                 raise BadRequestError("Request body argument '{arg}' was not List[str]".format(arg=arg))
-        return LangIdBatchRequest(json['files'], json['languages'])
+        # int args.
+        for arg in ['max_segment_length']:
+            if arg not in json:
+                raise BadRequestError("Missing '{arg}' argument (int) in request body.".format(arg=arg))
+            if not isinstance(json[arg], int):
+                raise BadRequestError("Request body argument '{arg}' was not of type int".format(arg=arg))
+        return LangIdBatchRequest(json['files'], json['languages'], json['max_segment_length'])
 
     @staticmethod
     def from_config(files: List[str], config: LangIdBatchConfig):
         return LangIdBatchRequest(
             files,
             config.languages,
+            config.max_segment_length,
         )
 
     @staticmethod
