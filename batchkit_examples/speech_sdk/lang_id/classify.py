@@ -255,8 +255,10 @@ class FileRecognizer:
             # Corner case: when there is only a single language segment of language "unknown", the LID
             # backend has absolutely no idea how to even make a homogeneous language estimate. In this case
             # we would rather naively assume some language.
+            defaulted_single_unknown_segment = False
             if len(lang_segments) == 1 and 'unknown' in lang_segments[0][0].lower():
                 lang_segments[0][0] = self.request.candidate_languages[0]
+                defaulted_single_unknown_segment = True
         except Exception as e:
             # While processing we could get a FailedRecognitionError, CancellationTokenException,
             # or other unexpected exceptions. Upstream decides whether to retry, but we need to at least
@@ -284,6 +286,21 @@ class FileRecognizer:
             end_time - start_time
         ))
 
+        # Cap segment lengths by breaking into smaller segments, if threshold exceeded.
+        max_seg_len = float(self.request.max_segment_length)
+        new_lang_segments = []
+        for old_seg in lang_segments:
+            language = old_seg[0]
+            start_offset_secs = old_seg[1]
+            end_offset_secs = old_seg[2]
+            while end_offset_secs - start_offset_secs > max_seg_len:
+                # Split.
+                new_end = start_offset_secs + max_seg_len
+                new_lang_segments.append([language, start_offset_secs, new_end])
+                start_offset_secs = new_end
+            new_lang_segments.append([language, start_offset_secs, end_offset_secs])
+        lang_segments = new_lang_segments
+
         # Write out the language segment files.
         base, _ = os.path.splitext(os.path.basename(self.request.filepath))
         for segno in range(len(lang_segments)):
@@ -296,7 +313,8 @@ class FileRecognizer:
                     "file": self.request.filepath,
                     "language": segment[0],
                     "start_offset": segment[1],
-                    "end_offset": segment[2]
+                    "end_offset": segment[2],
+                    "defaulted_lang_on_unknown": defaulted_single_unknown_segment
                 },
                 seg_filepath,
                 log=False,

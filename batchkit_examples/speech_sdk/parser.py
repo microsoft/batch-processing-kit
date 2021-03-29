@@ -119,6 +119,13 @@ def create_parser():
         '-port', '--apiserver_port', default=5000, type=check_positive,
         help="Port for listening when using APISERVER mode"
     )
+    parser.add_argument(
+        '-max_segment_length', '--max-segment-length',
+        default=3600, type=check_positive,
+        help="[Applies when multiple --language given only]."
+             "Cap the maximum audio segment length produced during language segmentation. "
+             "Longer segments will be broken up into smaller ones. Unit: positive integer seconds."
+    )
     return parser
 
 
