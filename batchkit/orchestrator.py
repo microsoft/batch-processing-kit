@@ -497,7 +497,8 @@ class Orchestrator:
             self._in_progress = work_in_progress
             self._in_progress_owner = work_in_progress_owner
 
-            # We've potentially repopulated the file_queue.
+            # We've potentially repopulated the file_queue, and old endpoint managers who were blocked waiting
+            # for work should now be woken up to be told of their termination.
             self._file_queue_cond.notify_all()
 
             # Start the new EndpointManagers.
