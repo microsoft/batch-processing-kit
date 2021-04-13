@@ -41,4 +41,10 @@ class LangIdEndpointStatusChecker(EndpointStatusChecker):
                     "to host: {1} on port: {2} Error details: {3}".format(
                         type(self), host, port, e.__repr__()))
                 return False
+            except ConnectionError as e:
+                self.log_event_queue.warning(
+                    "{0}: {1} while trying to open connection (trying to get SYN-ACK) "
+                    "to host: {2} on port: {3} Error details: {3}".format(
+                        type(self), type(e).__name__, host, port, e.__repr__()))
+                return False
         return True
