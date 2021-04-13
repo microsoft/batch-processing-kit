@@ -89,6 +89,9 @@ class UnifiedRunSummarizer(Thread):
             "running_language": None,
             "stage_file_stats": None,
             "processed_files": None,
+            "time_elapsed_lid": None,
+            "time_elapsed_stt": None,
+            "time_elapsed_total": None,
         }
 
     def _iterate_lid_running(self) -> Dict:
@@ -98,11 +101,15 @@ class UnifiedRunSummarizer(Thread):
             "running_language": "lid",
             "stage_file_stats": rs.get("overall_summary", {}).get("file_stats", {}),
             "processed_files": rs.get("processed_files", []),
+            "time_elapsed_lid": rs.get("overall_summary", {}).get("audio_stats", {}).get("time_elapsed_seconds", 0),
+            "time_elapsed_stt": None,
+            "time_elapsed_total": rs.get("overall_summary", {}).get("audio_stats", {}).get("time_elapsed_seconds", 0),
         }
 
     def _iterate_stt_running_or_done(self) -> Dict:
         stage = self.stage  # snapshot; can change.
         rs = self._lid_run_summ()
+        lid_elapsed = rs.get("overall_summary", {}).get("audio_stats", {}).get("time_elapsed_seconds", -1)
         lid_processed_files = rs.get("processed_files", None)
         if not lid_processed_files:
             return {"unified_run_summarizer_error": "lid_run_summary_missing"}
@@ -133,8 +140,14 @@ class UnifiedRunSummarizer(Thread):
         # Same order in which processing is done.
         latest_lang = "<pending>"
         latest_lang_file_stats = {}
+        stt_elapsed = 0
         for lang in self.langs:
             rs = self._stt_run_summ(lang)
+            elapsed = rs.get("overall_summary", {}).get("audio_stats", {}).get("time_elapsed_seconds", 0)
+            if elapsed == 0 or stt_elapsed == -1:
+                stt_elapsed = -1
+            else:
+                stt_elapsed += elapsed
             file_stats = rs.get("overall_summary", {}).get("file_stats", {})
             if file_stats != {}:
                 latest_lang = lang
@@ -178,7 +191,8 @@ class UnifiedRunSummarizer(Thread):
             running_language = latest_lang
             stage_file_stats = latest_lang_file_stats
         elif stage == MultilanguageBatchStage.STITCHING:
-            stage_str = MultilanguageBatchStage.STITCHING
+
+            stage_str = MultilanguageBatchStage.STITCHING.name
             running_language = None
             stage_file_stats = {}
         else:
@@ -195,6 +209,10 @@ class UnifiedRunSummarizer(Thread):
             "running_language": running_language,
             "stage_file_stats": stage_file_stats,
             "processed_files": processed_files,
+            "time_elapsed_lid": lid_elapsed,
+            "time_elapsed_stt": stt_elapsed,
+            # We assume that the time for stitching is negligible or should not be part of time_elapsed_total.
+            "time_elapsed_total": (lid_elapsed + stt_elapsed) if lid_elapsed > 0 and stt_elapsed > 0 else -1
         }
 
     def iterate(self):
