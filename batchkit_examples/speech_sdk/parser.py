@@ -113,6 +113,13 @@ def create_parser():
         '-port', '--apiserver_port', default=5000, type=check_positive,
         help="Port for listening when using APISERVER mode"
     )
+    parser.add_argument(
+        '-poll', '--poll', default=False, action='store_true',
+        help="In DAEMON mode, toggle to periodically poll the input directory for new files instead of relying "
+             "only on the Posix Watches facility. This is needed to make DAEMON mode work with filesystems that "
+             "do not support Posix Watches, for example CIFS mount. Polling is an increased burden on the filesystem. "
+             "Applies to --run-mode DAEMON only."
+    )
     return parser
 
 

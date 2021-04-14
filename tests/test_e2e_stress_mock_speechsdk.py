@@ -308,6 +308,7 @@ class UnstableSDKTestCase(object):
                             '-m', 'DAEMON' if daemon_mode else 'ONESHOT',
                             '-profanity', 'Raw',
                             '--store-combined-json',
+                            '--poll'  # watcher also applied; tests works with both at same time.
                         ]
 
                         if daemon_mode:

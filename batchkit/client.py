@@ -31,6 +31,7 @@ from .utils import get_input_files, flush_queue_into_set, InvalidConfigurationEr
 
 Settings = namedtuple("Settings",
                       "input_folder input_list output_folder "           # ONESHOT or DAEMON modes only.
+                      "poll_input "                                      # DAEMON mode only.
                       "apiserver_port "                                  # APISERVER mode only.
                       "scratch_folder log_folder store_combined_json "
                       "config_file strict_configuration_validation ")
@@ -88,6 +89,9 @@ def run(cmd_args: Namespace, batch_type: type):
         input_folder=cmd_args.input_folder,
         input_list=cmd_args.input_list,
         output_folder=cmd_args.output_folder,
+
+        # Args only relevant in case of DAEMON mode.
+        poll_input=cmd_args.poll,
 
         # Args only relevant in case of APISERVER mode.
         apiserver_port=cmd_args.apiserver_port,
@@ -389,6 +393,7 @@ class DaemonClient(Client):
         batch_config.combine_results = False
 
         super().__init__(settings, batch_config, log_queue)
+        self._poll_input: bool = settings.poll_input
         self._next_batch_files_que = multiprocessing.Queue()
         self._work_notifier = None
         self._is_success = True
@@ -459,8 +464,18 @@ class DaemonClient(Client):
         # Keep submitting new batch with whatever new files came in, only
         # after the currently running batch finishes.
         while not self._stop_evt.wait(5):
-
             assert self.orchestrator.is_alive()
+
+            # User may have enabled explicit polling to support some filesystems.
+            # Watch notifications for new files may also work for these users, so we
+            # put them all on same queue of incoming and make sure to dedup.
+            if self._poll_input:
+                polled_files: Set[str] = get_input_files(self.settings.input_folder, predicate, None)
+                for file in polled_files:
+                    if file not in submitted:
+                        logger.info("File {0} changed/added, adding it to processing list!".format(file))
+                        self._next_batch_files_que.put(file)
+
             candidates = flush_queue_into_set(self._next_batch_files_que)
             candidates = candidates.difference(submitted)
             if len(candidates) == 0:
