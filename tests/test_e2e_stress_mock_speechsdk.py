@@ -1,4 +1,5 @@
 import time
+from argparse import Namespace
 from collections import namedtuple
 from ctypes import cdll
 import sys
@@ -341,7 +342,9 @@ class UnstableSDKTestCase(object):
                             )
                             file_drop_thread.start()
 
-                        run(parse_cmdline(args), SpeechSDKBatchConfig)
+                        parsed_args: Namespace = parse_cmdline(args)
+                        parsed_args.language = 'en-US'
+                        run(parsed_args, SpeechSDKBatchConfig)
                         cancellation.set()
 
                         if daemon_mode:
