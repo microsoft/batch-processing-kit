@@ -3,6 +3,7 @@
 
 import copy
 import multiprocessing
+from multiprocessing import current_process
 import os
 import traceback
 from abc import ABC, abstractmethod
@@ -44,13 +45,17 @@ class WorkItemRequest(ABC):
         leq: LogEventQueue = log_event_queue if log_event_queue else proc_scope_leq
         ct: multiprocessing.Event = cancellation_token if cancellation_token else proc_scope_ct
 
+        leq.debug("Process: {0} starting to process work item of Type: {1}  and Filepath: {2}".format(
+            current_process().name, type(self).__name__, self.filepath))
         try:
             result: WorkItemResult = self.process_impl(endpoint_config, rtf, leq, ct)
         except Exception as err:
             tb = traceback.format_exc()
-            leq.log(LogLevel.DEBUG, "{0}: Exception in process(): {1}\n{2}".format(
+            leq.debug("{0}: Exception in WorkItemRequest.process(): {1}\n{2}".format(
                 type(self).__name__, type(err).__name__, tb))
             raise err
+        leq.debug("Process: {0} finished processing work item of Type: {1}  and Filepath: {2}".format(
+            current_process().name, type(self).__name__, self.filepath))
 
         if enable_profiling:
             pr.disable()

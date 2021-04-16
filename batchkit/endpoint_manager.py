@@ -157,7 +157,7 @@ class EndpointManager(Thread):
 
             # Steal some work. This can also be returned prematurely
             # if we are being woken up to stop.
-            self.logger.debug("EndpointManager name: {0}  will try to steal work".format(self.name))
+            self.logger.debug("EndpointManager name: {0}  will try to steal work.".format(self.name))
             self._in_steal_work_fn = True  # No lock protection because only this loop can toggle.
             work: WorkItemRequest = self._steal_work_fn(self)
             self._in_steal_work_fn = False
@@ -170,7 +170,8 @@ class EndpointManager(Thread):
                 self._finalize()
                 return
 
-            self.logger.debug("EndpointManager name: {0}  stole work and will delegate to a worker.".format(self.name))
+            self.logger.debug("EndpointManager name: {0}  stole work and will delegate to a worker. Item: {1}".format(
+                self.name, work.filepath))
             # Assign the request to a worker.
             with self._current_requests_lock:
                 self._current_requests += 1

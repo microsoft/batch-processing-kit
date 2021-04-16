@@ -24,14 +24,14 @@ from .utils import write_json_file_atomic, write_single_output_json, \
 from .logger import LogEventQueue
 from .run_summarizer import BatchRunSummarizer
 from .work_item import WorkItemResult, WorkItemRequest, SentinelWorkItemRequest, WorkItemQueue
-from .constants import ORCHESTRATOR_SCOPE_MAX_RETRIES, RUN_SUMMARY_LOOP_INTERVAL, DEBUG_LOOP_INTERVAL
+from .constants import ORCHESTRATOR_SCOPE_MAX_RETRIES, RUN_SUMMARY_LOOP_INTERVAL
 
 
 class Orchestrator:
     def __init__(self, submission_queue: multiprocessing.Queue, status_provider: BatchStatusProvider,
                  config_file: str, strict_config: bool, log_folder: str,
                  cache_search_dirs: List[str], log_event_que: LogEventQueue,
-
+                 debug_loop_interval: int,
                  singleton_run_summary_path: Optional[str] = None):
 
         self._submission_que: multiprocessing.Queue = submission_queue
@@ -41,6 +41,7 @@ class Orchestrator:
         self._log_folder: str = log_folder
         self._cache_search_dirs = cache_search_dirs
         self._log_event_que = log_event_que
+        self._debug_loop_interval: int = debug_loop_interval
         self._singleton_run_summary_path = singleton_run_summary_path
         self._on_batch_id = -1
         self._on_batch_type: type = type(None)
@@ -57,9 +58,9 @@ class Orchestrator:
                                           daemon=True)
 
         self.__debug_loop_thread = Thread(target=self.__debug_loop,
-                                  name="OrchestratorDebugLoop",
-                                  args=(()),
-                                  daemon=True)
+                                          name="OrchestratorDebugLoop",
+                                          args=(()),
+                                          daemon=True)
 
         #TODO(andwald): The following hypothetical thread dynamically sets RTF and Concurrency of EndpointManagers
         #               according to its own decoupled logic. This will be nice and pluggable since EndpointManagers
@@ -94,7 +95,10 @@ class Orchestrator:
 
         self._master_thread.start()
         self._run_summary_thread.start()
-        # self.__debug_loop_thread.start()  # Enable to debug concurrency changes.
+
+        # Enable to debug concurrency changes.
+        if self._debug_loop_interval > 0:
+            self.__debug_loop_thread.start()
 
     def is_alive(self):
         return self._master_thread.is_alive()
@@ -125,7 +129,8 @@ class Orchestrator:
 
     def __debug_loop(self):
         """
-        This is only intended to be used during development and debugging.
+        This is only intended to be used during development and debugging. The reported numbers are not
+        thread-safe so this is only intended to be used in a deadlock scenario.
         """
         def _check_lock_acq(lock):
             acquired = lock.acquire(block=False)
@@ -167,7 +172,7 @@ class Orchestrator:
             logger.debug("\n*** STACKTRACE - START ***\n")
             current_threads_stacktrace(use_logger=True)
             logger.debug("\n*** STACKTRACE - END ***\n")
-            time.sleep(DEBUG_LOOP_INTERVAL)
+            time.sleep(self._debug_loop_interval)
 
     def write_summary_information(self,
                                   write_run_summary: bool = True,
