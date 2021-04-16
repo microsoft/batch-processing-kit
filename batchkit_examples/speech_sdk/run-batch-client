@@ -6,6 +6,7 @@ import json
 import sys
 import os
 import glob
+from argparse import Namespace
 from typing import List
 
 
@@ -22,7 +23,7 @@ from batchkit_examples.speech_sdk.multilanguage.stage import MultilanguageBatchS
 
 # Main entry point
 if __name__ == '__main__':
-    args = parse_cmdline()
+    args: Namespace = parse_cmdline()
 
     # Single-language.
     if len(args.language) == 1:

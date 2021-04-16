@@ -126,6 +126,12 @@ def create_parser():
              "Cap the maximum audio segment length produced during language segmentation. "
              "Longer segments will be broken up into smaller ones. Unit: positive integer seconds."
     )
+    parser.add_argument(
+        '-debug_loop_interval', '--debug-loop-interval',
+        default=0, type=check_positive,
+        help="Interval in seconds to re-log debug information about the batchkit's orchestration components. "
+             "Useful for debugging. The default value of 0 means this information is not logged. "
+    )
     return parser
 
 
@@ -144,10 +150,10 @@ def parse_cmdline(args=None) -> Namespace:
     if args.scratch_folder is None:
         args.scratch_folder = tempfile.mkdtemp()
 
-    if isinstance(args.language, str):
-        args.language = [args.language]
-
     if isinstance(args.language, list) and args.run_mode != 'ONESHOT':
         parser.error("Multi-language speech-batch-kit can only be used in ONESHOT mode in this version.")
+
+    if isinstance(args.language, str):
+        args.language = [args.language]
 
     return args
