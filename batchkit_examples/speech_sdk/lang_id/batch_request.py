@@ -7,10 +7,12 @@ from batchkit.batch_request import BatchRequest
 from batchkit.logger import LogEventQueue
 from batchkit.utils import BadRequestError
 from batchkit.work_item import WorkItemRequest
+from batchkit.work_item_processor import WorkItemProcessor
 from batchkit_examples.speech_sdk.lang_id.batch_config import LangIdBatchConfig
 from batchkit_examples.speech_sdk.lang_id.endpoint_status import LangIdEndpointStatusChecker
 from batchkit_examples.speech_sdk.lang_id.run_summarizer import LangIdBatchRunSummarizer
 from batchkit_examples.speech_sdk.lang_id.work_item import LangIdWorkItemRequest
+from batchkit_examples.speech_sdk.lang_id.work_item_processor import LangIdWorkItemProcessor
 import batchkit_examples.speech_sdk.audio as audio
 
 
@@ -66,6 +68,10 @@ class LangIdBatchRequest(BatchRequest):
     @staticmethod
     def get_endpoint_status_checker(leq: LogEventQueue) -> LangIdEndpointStatusChecker:
         return LangIdEndpointStatusChecker(leq)
+
+    @staticmethod
+    def get_work_item_processor() -> WorkItemProcessor:
+        return LangIdWorkItemProcessor()
 
     def get_batch_run_summarizer(self) -> LangIdBatchRunSummarizer:
         return LangIdBatchRunSummarizer()

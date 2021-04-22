@@ -1,14 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-import multiprocessing
 import os
-from multiprocessing import current_process
 from typing import List, Optional
-import traceback
 import audiofile
 
-from batchkit.logger import LogEventQueue
 from batchkit.work_item import WorkItemRequest, WorkItemResult
 from batchkit_examples.speech_sdk.work_item import SpeechSDKWorkItemResult
 
@@ -34,45 +30,6 @@ class LangIdWorkItemRequest(WorkItemRequest):
         self.output_dir: str = output_dir
         self.log_dir: str = log_dir
         self._cached_duration = None
-
-    def process_impl(self, endpoint_config: dict, rtf: float,
-                     log_event_queue: LogEventQueue, cancellation_token: multiprocessing.Event,
-                     global_workitem_lock: multiprocessing.RLock):
-
-        # WORKAROUND: Rare race condition in protobuf library produces ImportError when multiple
-        # processes import concurrently or gives a deadlock. We will allow burning of a retry.
-        try:
-            log_event_queue.debug("{0} in {1} for work item {2}: Start importing classify module.".format(
-                current_process().name, type(self).__name__, self.filepath))
-            with global_workitem_lock:
-                from .classify import run_classifier
-            log_event_queue.debug("{0} in {1} for work item {2}: Finished importing classify module.".format(
-                current_process().name, type(self).__name__, self.filepath))
-        except ImportError as err:
-            tb = traceback.format_exc()
-            log_event_queue.warning("{0}: encountered {1}:\n{2}".format(
-                type(self).__name__, type(err).__name__, tb))
-            return LangIdWorkItemResult(
-                self,
-                False,
-                endpoint_config["host"],
-                0,
-                1,
-                current_process().name,
-                True,
-                False,
-                0,
-                type(err).__name__,
-                "Transient ImportError due to protobuf bug.",
-            )
-
-        return run_classifier(
-            self,
-            rtf,
-            endpoint_config,
-            log_event_queue,
-            cancellation_token
-        )
 
     # override
     def priority(self) -> int:
