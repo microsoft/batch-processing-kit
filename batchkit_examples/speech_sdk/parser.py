@@ -120,6 +120,12 @@ def create_parser():
              "do not support Posix Watches, for example CIFS mount. Polling is an increased burden on the filesystem. "
              "Applies to --run-mode DAEMON only."
     )
+    parser.add_argument(
+        '-debug_loop_interval', '--debug-loop-interval',
+        default=0, type=check_positive,
+        help="Interval in seconds to re-log debug information about the batchkit's orchestration components. "
+             "Useful for debugging. The default value of 0 means this information is not logged. "
+    )
     return parser
 
 

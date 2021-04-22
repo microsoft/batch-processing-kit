@@ -5,7 +5,6 @@ import multiprocessing
 from http import HTTPStatus
 from threading import Thread
 from typing import Tuple, Optional, List, Callable
-import logging
 
 from flask import Flask, Response, Blueprint, request
 

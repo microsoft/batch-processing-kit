@@ -3,7 +3,6 @@
 
 ORCHESTRATOR_SCOPE_MAX_RETRIES = 9    # Includes all retries. How # before orchestrator won't reschedule.
 RUN_SUMMARY_LOOP_INTERVAL = 30        # How often the run summary is recomputed and written.
-DEBUG_LOOP_INTERVAL = 30              # Applies only when debug thread enabled.
 
 # The number of times we will retry a SpeechSDKWorkItem as
 # long as its previous reasons for failure appear to be transient issues

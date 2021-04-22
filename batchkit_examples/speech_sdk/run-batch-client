@@ -5,6 +5,9 @@
 
 import sys
 import os
+import glob
+from argparse import Namespace
+from typing import List
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../..'))
 
@@ -15,6 +18,6 @@ from batchkit_examples.speech_sdk.batch_config import SpeechSDKBatchConfig
 
 # Main entry point
 if __name__ == '__main__':
-    args = parse_cmdline()
+    args: Namespace = parse_cmdline()
     client.run(args, SpeechSDKBatchConfig)
     exit(0)
