@@ -3,6 +3,7 @@
 
 import cProfile
 import multiprocessing
+import traceback
 from multiprocessing import RLock
 from multiprocessing.process import current_process
 import signal
@@ -11,9 +12,10 @@ from time import sleep
 from typing import List
 import ctypes
 
-from . import work_item
+from . import work_item, work_item_processor
 from .endpoint_status import EndpointStatusChecker
 from .work_item import WorkItemRequest, WorkItemResult
+from .work_item_processor import WorkItemProcessor
 from .logger import LogEventQueue
 from .utils import kill_children_procs, NonDaemonicPool
 
@@ -23,6 +25,7 @@ class EndpointManager(Thread):
             self, name: str, endpoint_name: str, endpoint_config: dict, log_folder: str, log_event_queue: LogEventQueue,
             cache_search_dirs: List[str], steal_work_fn, notify_work_success_fn, notify_work_failure_fn,
             endpoint_status_checker: EndpointStatusChecker, global_workitem_lock: RLock,
+            processor: WorkItemProcessor,
             enable_profiling: bool = False):
 
         Thread.__init__(self, name="EndpointManager_{0}".format(name), daemon=True)
@@ -37,6 +40,7 @@ class EndpointManager(Thread):
         self._notify_work_failure_fn = notify_work_failure_fn
         self._endpoint_status_checker: EndpointStatusChecker = endpoint_status_checker
         self.global_workitem_lock: RLock = global_workitem_lock
+        self.work_item_processor: WorkItemProcessor = processor
 
         # Create Atomic Variables for RTF and Concurrency so that we can be
         # manipulated by our self or someone else and also consume the
@@ -85,7 +89,7 @@ class EndpointManager(Thread):
                 current_process().name = NonDaemonicPool.sanitize_name(current_process().name, self.name)
                 signal.signal(signal.SIGTERM, signal.SIG_DFL)
                 signal.signal(signal.SIGINT, signal.SIG_DFL)
-                work_item.init_proc_scope(self._cancellation_token, self.logger, self.global_workitem_lock)
+                work_item_processor.init_proc_scope(self._cancellation_token, self.logger, self.global_workitem_lock)
 
             self._proc_pool = NonDaemonicPool(start_pool_size, worker_entry)
 
@@ -127,10 +131,11 @@ class EndpointManager(Thread):
                     if self._proc_pool:
                         self._proc_pool.set_min_num_procs(self.current_concurrency.value)
                 except Exception as e:
+                    exception_details = traceback.format_exc()
                     self.logger.error(
                         "EndpointManager {0} has its EndpointStatusChecker plug-in of type {1} failing "
                         "due to: {2}\n{3}".format(
-                            self.name, type(self._endpoint_status_checker).__name__, e.__repr__(), e.__traceback__))
+                            self.name, type(self._endpoint_status_checker).__name__, e.__repr__(), exception_details))
 
         Thread(
             target=check_throttle,
@@ -184,8 +189,8 @@ class EndpointManager(Thread):
 
             self._init_proc_pool()  # Lazy init.
             self._proc_pool.apply_async(
-                work.process,
-                [self.endpoint_config, self.current_rtf.value],
+                self.work_item_processor.process,
+                [work, self.endpoint_config, self.current_rtf.value],
                 callback=self.pool_callback,
                 error_callback=self.pool_error_callback
             )
@@ -203,7 +208,7 @@ class EndpointManager(Thread):
         # (which could indicate success or failure outcome), this
         # should be invoked only when no WorkItemResult could be produced.
         msg = "EndpointManager {0} failure in a WorkItemRequest: {1}\n{2}".format(
-            self.name, type(exception).__name__, exception.__traceback__)
+            self.name, type(exception).__name__, exception.__traceback__.__repr__())
         self.logger.fatal(msg)
         kill_children_procs()
         print(msg)  # Since may not get logged

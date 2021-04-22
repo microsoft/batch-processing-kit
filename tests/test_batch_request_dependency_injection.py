@@ -11,6 +11,7 @@ from batchkit.batch_request import BatchRequest
 from batchkit.logger import LogEventQueue
 from batchkit.run_summarizer import BatchRunSummarizer
 from batchkit.work_item import WorkItemRequest, WorkItemResult
+from batchkit.work_item_processor import WorkItemProcessor, StubWorkItemProcessor
 
 logger = logging.getLogger("test_dependency_injection")
 # logger.level = logging.DEBUG
@@ -81,6 +82,10 @@ class TBatchRequest(BatchRequest):
                         cache_search_dirs: List[str],
                         log_dir: str) -> List[TWorkItemRequest]:
         return [TWorkItemRequest(f, output_dir, self.some_int) for f in self.files]
+
+    @staticmethod
+    def get_work_item_processor() -> WorkItemProcessor:
+        return StubWorkItemProcessor()
 
 
 class DependencyInjectionTestCase(TestCase):

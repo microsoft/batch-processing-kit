@@ -18,6 +18,8 @@ from .logger import LogEventQueue
 from .run_summarizer import BatchRunSummarizer
 from .utils import BadRequestError
 from .work_item import WorkItemRequest
+from .work_item_processor import WorkItemProcessor
+
 
 logger = logging.getLogger("batch")
 
@@ -170,6 +172,16 @@ class BatchRequest(ABC):
         Make WorkItemRequests based on the BatchRequest.
         This is dependent on the concrete implementation of BatchRequest subtypes, and each subtype
         should have one or more subtypes of WorkItemRequest it can factory.
+        """
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def get_work_item_processor() -> WorkItemProcessor:
+        """
+        Returns an instance of a WorkItemProcessor subtype that is capable of handling
+        this batch. The WorkItemProcessor must be able to process any WorkItemRequest subtype
+        produced by this BatchRequest's `make_work_items()`.
         """
         pass
 
