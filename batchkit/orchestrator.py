@@ -23,6 +23,7 @@ from .utils import write_json_file_atomic, write_single_output_json, \
 from .logger import LogEventQueue
 from .run_summarizer import BatchRunSummarizer
 from .work_item import WorkItemResult, WorkItemRequest, SentinelWorkItemRequest, WorkItemQueue
+from .work_item_processor import WorkItemProcessor, StubWorkItemProcessor
 from .constants import ORCHESTRATOR_SCOPE_MAX_RETRIES, RUN_SUMMARY_LOOP_INTERVAL
 
 
@@ -426,17 +427,21 @@ class Orchestrator:
             gen = self._endpoint_generation
             self._endpoint_generation += 1
 
-            # Get an EndpointStatusChecker for the type of the
+            # Get an EndpointStatusChecker and WorkItemProcessor for the type of the
             # BatchRequest that is currently being processed.
             ep_status_checker: EndpointStatusChecker
+            work_item_processor: WorkItemProcessor
             if isinstance(None, self._on_batch_type):
                 ep_status_checker = UnknownEndpointStatusChecker(self._log_event_que)
+                work_item_processor = StubWorkItemProcessor()
             else:
                 ep_status_checker = self._on_batch_type.get_endpoint_status_checker(self._log_event_que)
+                work_item_processor = self._on_batch_type.get_work_item_processor()
 
             try:
                 # Determine EndpointManagers that need to be deleted (modified, new,
-                # or no longer exist). Do not touch EndpointManagers that have not changed.
+                # or no longer exist). Do not touch EndpointManagers that have not changed unless they
+                # now need a new WorkItemProcessor.
                 new_em_objs: List[EndpointManager] = []
                 # Start by assuming every EndpointManager needs to be deleted.
                 deleted_managers: Dict[str, EndpointManager] = \
@@ -444,10 +449,11 @@ class Orchestrator:
 
                 for endpoint_name, endpoint_config in config_data.items():
                     # If an existing endpoint is totally preserved in the new config, don't delete it.
-                    # Also require that the endpoint's manager is not terminally stopped, otherwise we need
-                    # a new instance of it anyway.
+                    # Also require that the endpoint's manager is not terminally stopped, and also require its
+                    # WorkItemProcessor type shouldn't change, otherwise we need a new instance of it anyway.
                     if endpoint_name in deleted_managers and \
                       endpoint_config == deleted_managers[endpoint_name].endpoint_config and \
+                      type(deleted_managers[endpoint_name].work_item_processor) == type(work_item_processor) and \
                       not deleted_managers[endpoint_name]._stop_requested:  # noqa
                         # Don't delete this EndpointManager and don't make a new one.
                         del deleted_managers[endpoint_name]
@@ -469,6 +475,7 @@ class Orchestrator:
                             self.notify_work_failure,
                             ep_status_checker,
                             self._global_workitem_lock,
+                            work_item_processor,
                         )
                     )
             # Validation of the config could fail or invalid yaml may have been given, etc.

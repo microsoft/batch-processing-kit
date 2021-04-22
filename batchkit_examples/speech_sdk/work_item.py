@@ -1,12 +1,11 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+
 import json
-import multiprocessing
 from typing import List, Optional
 import audiofile
 import os
 
-from batchkit.logger import LogEventQueue
 from batchkit.work_item import WorkItemRequest, WorkItemResult
 
 
@@ -37,18 +36,6 @@ class SpeechSDKWorkItemRequest(WorkItemRequest):
         self.allow_resume = allow_resume
         self.enable_sentiment = enable_sentiment
         self._cached_duration = None
-
-    def process_impl(self, endpoint_config: dict, rtf: float,
-                     log_event_queue: LogEventQueue, cancellation_token: multiprocessing.Event,
-                     global_workitem_lock: multiprocessing.RLock):
-        from .recognize import run_recognizer
-        return run_recognizer(
-            self,
-            rtf,
-            endpoint_config,
-            log_event_queue,
-            cancellation_token
-        )
 
     # override
     def priority(self) -> int:

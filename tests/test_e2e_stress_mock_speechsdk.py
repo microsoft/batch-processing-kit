@@ -302,7 +302,7 @@ class UnstableSDKTestCase(object):
                             '-input_folder', tempdir_in,
                             '-scratch_folder', tempdir_scratch,
                             '-log_folder', tempdir_log,
-                            '-console_log_level', 'INFO',
+                            '-console_log_level', 'INFO',  # DEBUG
                             '-file_log_level', 'DEBUG',
                             '-nbest', '1',
                             '-m', 'DAEMON' if daemon_mode else 'ONESHOT',

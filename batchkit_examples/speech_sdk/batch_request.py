@@ -7,14 +7,18 @@ from batchkit.batch_request import BatchRequest
 from batchkit.logger import LogEventQueue
 from batchkit.utils import BadRequestError
 from batchkit.work_item import WorkItemRequest
+from batchkit.work_item_processor import WorkItemProcessor
+
 from batchkit_examples.speech_sdk.batch_config import SpeechSDKBatchConfig
 from batchkit_examples.speech_sdk.endpoint_status import SpeechSDKEndpointStatusChecker
 from batchkit_examples.speech_sdk.run_summarizer import SpeechSDKBatchRunSummarizer
 from batchkit_examples.speech_sdk.work_item import SpeechSDKWorkItemRequest
 import batchkit_examples.speech_sdk.audio as audio
+from batchkit_examples.speech_sdk.work_item_processor import SpeechSDKWorkItemProcessor
 
 
 class SpeechSDKBatchRequest(BatchRequest):
+
     def __init__(self, files: List[str],
                  language: str, diarization: str, nbest: int, profanity: str,
                  allow_resume: bool, enable_sentiment: bool, combine_results: bool = False):
@@ -88,6 +92,10 @@ class SpeechSDKBatchRequest(BatchRequest):
     @staticmethod
     def get_endpoint_status_checker(leq: LogEventQueue) -> SpeechSDKEndpointStatusChecker:
         return SpeechSDKEndpointStatusChecker(leq)
+
+    @staticmethod
+    def get_work_item_processor() -> WorkItemProcessor:
+        return SpeechSDKWorkItemProcessor()
 
     def get_batch_run_summarizer(self) -> SpeechSDKBatchRunSummarizer:
         return SpeechSDKBatchRunSummarizer()
