@@ -17,7 +17,7 @@ from queue import Empty
 
 import psutil
 from multiprocessing import pool
-from typing import Any, Optional, Set, List, Callable, Iterable
+from typing import Any, Optional, Set, Callable, Iterable
 from random import random
 from multiprocessing.connection import Connection
 

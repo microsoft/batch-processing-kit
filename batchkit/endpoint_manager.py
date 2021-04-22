@@ -12,7 +12,7 @@ from time import sleep
 from typing import List
 import ctypes
 
-from . import work_item, work_item_processor
+from . import work_item_processor
 from .endpoint_status import EndpointStatusChecker
 from .work_item import WorkItemRequest, WorkItemResult
 from .work_item_processor import WorkItemProcessor
