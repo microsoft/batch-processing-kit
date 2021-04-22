@@ -1,21 +1,17 @@
 import logging
 import sys
-import multiprocessing
-from multiprocessing import RLock
 from argparse import Namespace
 from typing import List, Dict
 from unittest import TestCase
 
 from batchkit.batch_config import BatchConfig
 from batchkit.batch_request import BatchRequest
-from batchkit.logger import LogEventQueue
 from batchkit.run_summarizer import BatchRunSummarizer
 from batchkit.work_item import WorkItemRequest, WorkItemResult
 from batchkit.work_item_processor import WorkItemProcessor, StubWorkItemProcessor
 
 logger = logging.getLogger("test_dependency_injection")
-# logger.level = logging.DEBUG
-logger.level = logging.INFO
+logger.level = logging.INFO  # logging.DEBUG
 log_stream_handler = logging.StreamHandler(sys.stdout)
 
 
