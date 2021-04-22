@@ -39,7 +39,8 @@ class SpeechSDKWorkItemRequest(WorkItemRequest):
         self._cached_duration = None
 
     def process_impl(self, endpoint_config: dict, rtf: float,
-                     log_event_queue: LogEventQueue, cancellation_token: multiprocessing.Event):
+                     log_event_queue: LogEventQueue, cancellation_token: multiprocessing.Event,
+                     global_workitem_lock: multiprocessing.RLock):
         from .recognize import run_recognizer
         return run_recognizer(
             self,

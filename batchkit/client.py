@@ -33,6 +33,7 @@ Settings = namedtuple("Settings",
                       "input_folder input_list output_folder "           # ONESHOT or DAEMON modes only.
                       "poll_input "                                      # DAEMON mode only.
                       "apiserver_port "                                  # APISERVER mode only.
+                      "debug_loop_interval "
                       "scratch_folder log_folder store_combined_json "
                       "config_file strict_configuration_validation ")
 
@@ -97,6 +98,7 @@ def run(cmd_args: Namespace, batch_type: type):
         apiserver_port=cmd_args.apiserver_port,
 
         # Following args are relevant in all modes.
+        debug_loop_interval=cmd_args.debug_loop_interval,
         scratch_folder=cmd_args.scratch_folder,
         log_folder=cmd_args.log_folder,
         config_file=cmd_args.configuration_file,
@@ -200,6 +202,9 @@ class Client(ABC):
             # LogEventQueue is a more direct path for logging in concurrent
             # multi-process scenarios.
             log_queue,
+
+            # How often to do tracing of orchestration state.
+            self.settings.debug_loop_interval,
 
             # Client type will determine whether run summary is singleton
             # in nature or reported per-batch.

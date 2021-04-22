@@ -3,6 +3,7 @@
 
 import copy
 import multiprocessing
+from multiprocessing import current_process, RLock
 import os
 import traceback
 from abc import ABC, abstractmethod
@@ -13,15 +14,20 @@ import cProfile
 
 from batchkit.logger import LogEventQueue, LogLevel
 
-# Process-wide globals for CancellationToken and LogEventQueue.
+# Process-wide (work item pool worker) globals for CancellationToken, LogEventQueue, WorkItemLock_GlobalScope.
+# These are objects that may not be serializable and are needed by all work items that a pool worker processes.
 proc_scope_ct: Optional[multiprocessing.Event] = None
 proc_scope_leq: Optional[LogEventQueue] = None
+proc_scope_global_workitem_lock: Optional[RLock] = None
 
 
-def init_proc_scope(cancellation_token: multiprocessing.Event, log_event_queue: LogEventQueue):
-    global proc_scope_ct, proc_scope_leq
+def init_proc_scope(
+        cancellation_token: multiprocessing.Event, log_event_queue: LogEventQueue,
+        global_workitem_lock: RLock):
+    global proc_scope_ct, proc_scope_leq, proc_scope_global_workitem_lock
     proc_scope_ct = cancellation_token
     proc_scope_leq = log_event_queue
+    proc_scope_global_workitem_lock = global_workitem_lock
 
 
 class WorkItemRequest(ABC):
@@ -34,8 +40,12 @@ class WorkItemRequest(ABC):
 
     def process(self, endpoint_config: dict, rtf: float,
                 enable_profiling: bool = False,
+
+                # Work-item specifics do not need to be provided if they can be defaulted
+                # from process scope via init_proc_scope().
                 log_event_queue: Optional[LogEventQueue] = None,
-                cancellation_token: Optional[multiprocessing.Event] = None):
+                cancellation_token: Optional[multiprocessing.Event] = None,
+                global_workitem_lock: Optional[RLock] = None):
 
         if enable_profiling:
             pr = cProfile.Profile()
@@ -43,14 +53,19 @@ class WorkItemRequest(ABC):
 
         leq: LogEventQueue = log_event_queue if log_event_queue else proc_scope_leq
         ct: multiprocessing.Event = cancellation_token if cancellation_token else proc_scope_ct
+        gwil: RLock = global_workitem_lock if global_workitem_lock else proc_scope_global_workitem_lock
 
+        leq.debug("Process: {0} starting to process work item of Type: {1}  and Filepath: {2}".format(
+            current_process().name, type(self).__name__, self.filepath))
         try:
-            result: WorkItemResult = self.process_impl(endpoint_config, rtf, leq, ct)
+            result: WorkItemResult = self.process_impl(endpoint_config, rtf, leq, ct, gwil)
         except Exception as err:
             tb = traceback.format_exc()
-            leq.log(LogLevel.DEBUG, "{0}: Exception in process(): {1}\n{2}".format(
+            leq.debug("{0}: Exception in WorkItemRequest.process(): {1}\n{2}".format(
                 type(self).__name__, type(err).__name__, tb))
             raise err
+        leq.debug("Process: {0} finished processing work item of Type: {1}  and Filepath: {2}".format(
+            current_process().name, type(self).__name__, self.filepath))
 
         if enable_profiling:
             pr.disable()
@@ -59,7 +74,8 @@ class WorkItemRequest(ABC):
 
     @abstractmethod
     def process_impl(self, endpoint_config: dict, rtf: float,
-                     log_event_queue: LogEventQueue, cancellation_token: multiprocessing.Event):
+                     log_event_queue: LogEventQueue, cancellation_token: multiprocessing.Event,
+                     global_workitem_lock: RLock):
         pass
 
     def priority(self) -> int:   # noqa; intended virtual override
@@ -83,7 +99,8 @@ class SentinelWorkItemRequest(WorkItemRequest):
         super().__init__("STOP", "")
 
     def process_impl(self, endpoint_config: dict, rtf: float,
-                     log_event_queue: LogEventQueue, cancellation_token: multiprocessing.Event):
+                     log_event_queue: LogEventQueue, cancellation_token: multiprocessing.Event,
+                     global_workitem_lock: RLock):
         return None
 
 

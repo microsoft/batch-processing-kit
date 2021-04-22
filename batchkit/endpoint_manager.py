@@ -3,8 +3,9 @@
 
 import cProfile
 import multiprocessing
-import signal
+from multiprocessing import RLock
 from multiprocessing.process import current_process
+import signal
 from threading import Thread
 from time import sleep
 from typing import List
@@ -21,7 +22,9 @@ class EndpointManager(Thread):
     def __init__(
             self, name: str, endpoint_name: str, endpoint_config: dict, log_folder: str, log_event_queue: LogEventQueue,
             cache_search_dirs: List[str], steal_work_fn, notify_work_success_fn, notify_work_failure_fn,
-            endpoint_status_checker: EndpointStatusChecker, enable_profiling: bool = False):
+            endpoint_status_checker: EndpointStatusChecker, global_workitem_lock: RLock,
+            enable_profiling: bool = False):
+
         Thread.__init__(self, name="EndpointManager_{0}".format(name), daemon=True)
         self.name = name
         self.endpoint_name = endpoint_name
@@ -33,6 +36,7 @@ class EndpointManager(Thread):
         self._notify_work_success_fn = notify_work_success_fn
         self._notify_work_failure_fn = notify_work_failure_fn
         self._endpoint_status_checker: EndpointStatusChecker = endpoint_status_checker
+        self.global_workitem_lock: RLock = global_workitem_lock
 
         # Create Atomic Variables for RTF and Concurrency so that we can be
         # manipulated by our self or someone else and also consume the
@@ -81,7 +85,8 @@ class EndpointManager(Thread):
                 current_process().name = NonDaemonicPool.sanitize_name(current_process().name, self.name)
                 signal.signal(signal.SIGTERM, signal.SIG_DFL)
                 signal.signal(signal.SIGINT, signal.SIG_DFL)
-                work_item.init_proc_scope(self._cancellation_token, self.logger)
+                work_item.init_proc_scope(self._cancellation_token, self.logger, self.global_workitem_lock)
+
             self._proc_pool = NonDaemonicPool(start_pool_size, worker_entry)
 
     def set_endpoint_status_checker(self, endpoint_status_checker: EndpointStatusChecker):
@@ -157,7 +162,7 @@ class EndpointManager(Thread):
 
             # Steal some work. This can also be returned prematurely
             # if we are being woken up to stop.
-            self.logger.debug("EndpointManager name: {0}  will try to steal work".format(self.name))
+            self.logger.debug("EndpointManager name: {0}  will try to steal work.".format(self.name))
             self._in_steal_work_fn = True  # No lock protection because only this loop can toggle.
             work: WorkItemRequest = self._steal_work_fn(self)
             self._in_steal_work_fn = False
@@ -170,7 +175,8 @@ class EndpointManager(Thread):
                 self._finalize()
                 return
 
-            self.logger.debug("EndpointManager name: {0}  stole work and will delegate to a worker.".format(self.name))
+            self.logger.debug("EndpointManager name: {0}  stole work and will delegate to a worker. Item: {1}".format(
+                self.name, work.filepath))
             # Assign the request to a worker.
             with self._current_requests_lock:
                 self._current_requests += 1

@@ -2,12 +2,8 @@
 # Licensed under the MIT License.
 
 from abc import ABC, abstractmethod
-import logging
 
 from .logger import LogEventQueue
-
-
-logger = logging.getLogger("batch")
 
 
 class EndpointStatusChecker(ABC):
