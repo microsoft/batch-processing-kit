@@ -65,6 +65,7 @@ if __name__ == '__main__':
         # Second, do transcription for each language, one at a time.
         run_summarizer.set_stage(MultilanguageBatchStage.PER_LANG_STT)
         create_dir(transcription_scratch)
+        """
         for lang in langs:
             manifest = os.path.join(transcription_scratch, lang + "_file_manifest")
             print("wrote " + manifest)
@@ -80,6 +81,7 @@ if __name__ == '__main__':
             args.output_folder = os.path.join(transcription_output_base, lang)
             args.log_folder = os.path.join(transcription_logs_base, lang)
             client.run(args, SpeechSDKBatchConfig)
+        """
 
         # Third, stitch all the results together.
         run_summarizer.set_stage(MultilanguageBatchStage.STITCHING)
