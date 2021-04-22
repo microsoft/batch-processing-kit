@@ -126,12 +126,6 @@ def create_parser():
              "Applies to --run-mode DAEMON only."
     )
     parser.add_argument(
-        '-debug_loop_interval', '--debug-loop-interval',
-        default=0, type=check_positive,
-        help="Interval in seconds to re-log debug information about the batchkit's orchestration components. "
-             "Useful for debugging. The default value of 0 means this information is not logged. "
-    )
-    parser.add_argument(
         '-max_segment_length', '--max-segment-length',
         default=3600, type=check_positive,
         help="[Applies when multiple --language given only]."
