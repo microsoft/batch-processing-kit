@@ -36,12 +36,18 @@ class LangIdWorkItemRequest(WorkItemRequest):
         self._cached_duration = None
 
     def process_impl(self, endpoint_config: dict, rtf: float,
-                     log_event_queue: LogEventQueue, cancellation_token: multiprocessing.Event):
+                     log_event_queue: LogEventQueue, cancellation_token: multiprocessing.Event,
+                     global_workitem_lock: multiprocessing.RLock):
 
         # WORKAROUND: Rare race condition in protobuf library produces ImportError when multiple
-        # processes import concurrently. We will allow burning of a retry.
+        # processes import concurrently or gives a deadlock. We will allow burning of a retry.
         try:
-            from .classify import run_classifier
+            log_event_queue.debug("{0} in {1} for work item {2}: Start importing classify module.".format(
+                current_process().name, type(self).__name__, self.filepath))
+            with global_workitem_lock:
+                from .classify import run_classifier
+            log_event_queue.debug("{0} in {1} for work item {2}: Finished importing classify module.".format(
+                current_process().name, type(self).__name__, self.filepath))
         except ImportError as err:
             tb = traceback.format_exc()
             log_event_queue.warning("{0}: encountered {1}:\n{2}".format(

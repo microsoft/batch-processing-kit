@@ -2,8 +2,8 @@
 # Licensed under the MIT License.
 
 import cProfile
-import multiprocessing
 import traceback
+import multiprocessing
 from multiprocessing import RLock
 from multiprocessing.process import current_process
 import signal
@@ -71,7 +71,7 @@ class EndpointManager(Thread):
         # A process pool that will be used by this EndpointManager only.
         # Note that the concurrency Atomic Var and the proc pool are managed asynchronous to each other.
         assert multiprocessing.get_start_method() == 'fork'
-        self._proc_pool: NonDaemonicPool = None
+        self._proc_pool: NonDaemonicPool = None  # noqa
 
     def _init_proc_pool(self):
         """

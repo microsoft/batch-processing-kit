@@ -39,11 +39,6 @@ class TWorkItemRequest(WorkItemRequest):
         self.output_dir = output_dir
         self.some_int = some_int
 
-    def process_impl(self, endpoint_config: dict, rtf: float,
-                     log_event_queue: LogEventQueue, cancellation_token: multiprocessing.Event,
-                     global_workitem_lock: RLock):
-        log_event_queue.info("Did the work")
-
 
 class TBatchRunSummarizer(BatchRunSummarizer):
     def __init__(self):
