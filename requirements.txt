@@ -19,7 +19,7 @@ psutil>=5.7.0
 
 ### examples
 grpcio==1.27.2
-protobuf
+protobuf==3.15.8
 grpcio-tools==1.27.2
 # Needed only for stress tests and batchkit_examples/speech_sdk:
 azure-cognitiveservices-speech==1.15.0

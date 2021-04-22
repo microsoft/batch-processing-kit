@@ -3,7 +3,7 @@
 
 import copy
 import multiprocessing
-from multiprocessing import current_process
+from multiprocessing import current_process, RLock
 import os
 import traceback
 from abc import ABC, abstractmethod
