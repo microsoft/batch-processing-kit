@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 
 from typing import List
-import json
 
 from batchkit.batch_request import BatchRequest
 from batchkit.logger import LogEventQueue
