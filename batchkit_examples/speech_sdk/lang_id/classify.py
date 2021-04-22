@@ -2,18 +2,13 @@
 # Licensed under the MIT License.
 
 import os
-import shutil
 import time
-import json
 import traceback
-from threading import Event
 import multiprocessing
 from multiprocessing import current_process
 from functools import wraps
 from typing import List, Optional
-import copy
 import wave
-from collections import defaultdict
 import grpc
 
 from batchkit.logger import LogEventQueue, LogLevel
