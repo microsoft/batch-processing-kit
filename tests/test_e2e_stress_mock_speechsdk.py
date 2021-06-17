@@ -37,6 +37,11 @@ PROB_ERROR_EVENT = 0.05
 LONG_LIVED_TRANSCRIPTION_FRAC = 0.05
 LONG_LIVED_TRANSCRIPTION_TIME = 3  # seconds
 
+# What fraction of files will ultimately deadlock, i.e. emulate Speech SDK malfunctions
+# and there is never any callback.
+DEADLOCKED_TRANSCRIPTION_FRAC = 0.02
+DEADLOCKED_TRANSCRIPTION_TIMEOUT = LONG_LIVED_TRANSCRIPTION_TIME + 3  # Used to override SPEECHSDK_RESULT_TIMEOUT
+
 # Failure probability to emulate an unreliable filesystem (e.g. SMB share)
 # for ops other than reads/writes like rename, unlink, copy.
 PROB_IO_OSERROR = 0.05
@@ -194,6 +199,10 @@ def speechsdk_provider():
                 # We have a successful outcome and just one utterance.
                 if random() < LONG_LIVED_TRANSCRIPTION_FRAC:
                     time.sleep(LONG_LIVED_TRANSCRIPTION_TIME)
+                if random() < DEADLOCKED_TRANSCRIPTION_FRAC:
+                    # Emulate that the speech sdk library never invokes the callbacks
+                    # ever again for this session.
+                    return
                 self.recognized.on_event(Event.RecognizedEvent())
                 maybe_segv()
                 maybe_raise()
@@ -239,6 +248,7 @@ class UnstableSDKTestCase(object):
         batchkit_examples.speech_sdk.recognize.speechsdk_provider = speechsdk_provider
         batchkit_examples.speech_sdk.recognize.SpeechSDKEndpointStatusChecker.check_endpoint = check_server
         batchkit_examples.speech_sdk.endpoint_status.SpeechSDKEndpointStatusChecker.check_endpoint = check_server
+        batchkit_examples.speech_sdk.recognize.SPEECHSDK_RESULT_TIMEOUT = DEADLOCKED_TRANSCRIPTION_TIMEOUT
 
         # We only cause transient errors so eventually all files pass.
         batchkit_examples.speech_sdk.recognize.RECOGNIZER_SCOPE_RETRIES = 2

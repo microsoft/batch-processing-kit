@@ -24,6 +24,9 @@ from .endpoint_status import SpeechSDKEndpointStatusChecker
 # Time unit for the Speech SDK
 TIME_UNIT: float = 10000000.0
 
+# Minimum duration to give Speech SDK opportunity to report forward progress on a file
+# before it presumed that the Speech SDK has malfunctioned, in seconds.
+SPEECHSDK_RESULT_TIMEOUT: float = 180.0
 
 # Dependency Injection permitting mocked behavior of the SDK.
 # If desirable, this must be a function that imports the module.
@@ -270,6 +273,7 @@ class FileRecognizer:
 
         init_gstreamer()
         converted_audio_file, audio_duration = convert_audio(audio_file, self._log_event_queue)
+        audio_file_basename = os.path.basename(audio_file)
         assert audio_duration is not None
 
         if self._allow_resume and json_data is not None:
@@ -355,7 +359,6 @@ class FileRecognizer:
         speech_config.set_property_by_name("SPEECH-MaxBufferSizeSeconds", "1800")
 
         if self._log_folder is not None:
-            audio_file_basename = os.path.basename(audio_file)
             base, ext = os.path.splitext(audio_file_basename)
             log_filename = "{0}.{1}.sdk.log".format(os.path.join(base + "_" + ext[1:]), current_process().name)
             output_file_log = os.path.join(self._log_folder, log_filename)
@@ -384,7 +387,6 @@ class FileRecognizer:
             """
             nonlocal done_event, is_success, audio_file, error_details
             speech_recognizer.stop_continuous_recognition()
-            done_event.set()
             if evt.result.reason == speechsdk.ResultReason.Canceled and \
                     evt.cancellation_details.reason == speechsdk.CancellationReason.Error:
                 # WORKAROUND: For a known bug with erroneous InternalServerError returned by SRFrontEnd
@@ -395,8 +397,9 @@ class FileRecognizer:
                 else:
                     is_success = False
                     error_details = str(evt.cancellation_details)
-                    self._log_event_queue.log(LogLevel.DEBUG,
-                                              "Error transcribing {0}, details: {1}".format(audio_file, error_details))
+                    self._log_event_queue.warning(
+                        "Error transcribing {0}, details: {1}".format(audio_file, error_details))
+            done_event.set()
 
         def audio_recognized(evt):
             """
@@ -441,7 +444,29 @@ class FileRecognizer:
         speech_recognizer.start_continuous_recognition()
 
         # Wait for the done event to be set, but check if it's because cancellation was triggered.
-        done_event.wait()
+        # Add timeout to be safe from extremely rare but possible Speech SDK deadlock (workaround).
+        # Timeout duration is a function of how much audio is left.
+        while True:
+            last_watermark: float = last_processed_offset_secs  # Race is okay.
+            audio_remaining: float = audio_duration - last_watermark
+            timeout: float
+            # Make an exception in diarization mode because final results are delayed.
+            if self._diarization == "None":
+                # Generous heuristic.
+                timeout = max(SPEECHSDK_RESULT_TIMEOUT, audio_remaining / (float(self._throttle)/100.0))
+            else:
+                timeout = 1e9
+
+            if done_event.wait(timeout=timeout):
+                break
+            if last_processed_offset_secs == last_watermark:
+                # No forward progress was made. Speech SDK has malfunctioned.
+                is_success = False
+                error_details = "Speech SDK failed to make any forward progress after {0} seconds".format(timeout)
+                self._log_event_queue.warning("Error transcribing {0}, details: {1}".format(audio_file, error_details))
+                break
+            # Else forward progress was made, and we keep waiting.
+
         if cancellation_token.is_set():
             raise CancellationTokenException(cancel_msg)
         end_time = time.time()
