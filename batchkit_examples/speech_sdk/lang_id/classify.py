@@ -102,7 +102,7 @@ class FileRecognizer:
         :return: LangIdWorkItemResult instance, all details whether passed or failed.
         """
         self._log_event_queue.log(LogLevel.INFO,
-                                  "Processing file: {0} on endpoint: {1}, with process: {2}".format(
+                                  "Start Processing file: {0} on endpoint: {1}, with process: {2}".format(
                                         self.request.filepath,
                                         self._host,
                                         current_process().name))
@@ -146,6 +146,12 @@ class FileRecognizer:
             error_type = type(e).__name__
 
         latency = time.time() - start
+
+        self._log_event_queue.log(LogLevel.INFO,
+                                  "End Processing file: {0} on endpoint: {1}, with process: {2}".format(
+                                        self.request.filepath,
+                                        self._host,
+                                        current_process().name))
 
         # Generate output
         return LangIdWorkItemResult(
@@ -235,7 +241,6 @@ class FileRecognizer:
             raise CancellationTokenException(msg)
 
         start_time = time.time()
-        is_success = True
 
         init_gstreamer()
         self._converted_audio_file, self._audio_duration = convert_audio(self.request.filepath, self._log_event_queue)
@@ -244,6 +249,7 @@ class FileRecognizer:
         try:
             # Additional checks beyond the framework's audio validation, because LID model more constrained.
             self._validate_file_format(self._converted_audio_file)
+            self._log_event_queue.debug("Starting language segmentation on file: {0}".format(self.request.filepath))
 
             lang_segments = self._segment(self._converted_audio_file, cancellation_token)
 
@@ -261,7 +267,7 @@ class FileRecognizer:
             if os.path.abspath(self.request.filepath) != os.path.abspath(self._converted_audio_file):
                 os.remove(self._converted_audio_file)
             self._log_event_queue.warning(
-                "A language segmentation attempt of file: {0} against endpoint: {1} on process: {2} has failed.".format(
+                "Failed language segmentation on file: {0} against endpoint: {1} on process: {2}.".format(
                     self.request.filepath, self._host, current_process().name))
 
             # grpc errors are usually not picklable, so pull out the details.
@@ -275,11 +281,8 @@ class FileRecognizer:
                 raise e
 
         end_time = time.time()
-        self._log_event_queue.info("Finished language segmentation on file: {0} -- {1}; wall time taken: {2}s".format(
-            self.request.filepath,
-            "PASS" if is_success else "FAIL",
-            end_time - start_time
-        ))
+        self._log_event_queue.info("Finished language segmentation on file: {0}; wall time taken: {1}s".format(
+            self.request.filepath, end_time - start_time))
 
         # Cap segment lengths by breaking into smaller segments, if threshold exceeded.
         max_seg_len = float(self.request.max_segment_length)
