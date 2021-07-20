@@ -104,7 +104,7 @@ class FileRecognizer:
         self._language = endpoint_config["language"]
         self._log_event_queue = log_event_queue
 
-        assert(request.language == self._language)
+        assert(request.language.lower() == self._language.lower())
         self.request = request
         self._filepath = request.filepath
         self._nbest = request.nbest
