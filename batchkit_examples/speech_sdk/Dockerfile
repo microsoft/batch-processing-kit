@@ -18,4 +18,9 @@ COPY dist/${BATCHKIT_EXAMPLES_PKG}-* /
 RUN python3 -m pip install setuptools wheel && \
     python3 -m pip install ${BATCHKIT_EXAMPLES_PKG}-*.whl
 
+# Temporary in this branch -- just trying a particular build of speech sdk for when posix reads fail which can
+# happen on particular network filesystem  drivers e.g. gluster.
+COPY batchkit_examples/speech_sdk/azure_cognitiveservices_speech-1.18.0b0.dev22306528-cp36-cp36m-manylinux1_x86_64.whl /
+RUN python3 -m pip install azure_cognitiveservices_speech-1.18.0b0.dev22306528-cp36-cp36m-manylinux1_x86_64.whl
+
 ENTRYPOINT ["run-batch-client"]
