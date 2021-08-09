@@ -1,13 +1,52 @@
 # Introduction
 
 Generic batch processing framework for managing the orchestration, dispatch, fault tolerance, and monitoring of 
-arbitrary work items against many endpoints. Extensible via dependency injection. 
+arbitrary work items against many endpoints. Extensible via dependency injection. Worker endpoints can be local,
+remote, containers, cloud APIs, different processes, or even just different listener sockets in the same process.
 
 Includes examples against Azure Cognitive Service containers for ML eval workloads.
 
-# Usage
+# Consuming
+
+The framework can be built on via template method pattern and dependency injection. One simply needs to provide concrete implementation for the following types:
+
+`WorkItemRequest`: Encapsulates all the details needed by the `WorkItemProcessor` to process a work item.
+
+`WorkItemResult`: Representation of the outcome of an attempt to process a `WorkItemRequest`.
+
+`WorkItemProcessor`: Provides implementation on how to process a `WorkItemRequest` against an endpoint.
+
+`BatchRequest`: Represents a batch of work items to do. Produces a collection of `WorkItemRequest`s.
+
+`BatchConfig`: Details needed for a `BatchRequest` to produce the collection of `WorkItemRequest`s.
+
+`BatchRunSummarizer`: Implements a near-real-time status updater based on `WorkItemResult`s as the batch progresses.
+
+`EndpointStatusChecker`: Specifies how to determine whether an endpoint is healthy and ready to take on work from a `WorkItemProcessor`.
+
+
+The [Speech Batch Kit](https://github.com/microsoft/batch-processing-kit/blob/master/batchkit_examples/speech_sdk/README.md) is currently our prime example for consuming the framework.
 
 The `batchkit` package is available as an ordinary pypi package. See versions here: https://pypi.org/project/batchkit
+
+# Dev Environment
+
+This project is developed for and consumed in Linux environments. Consumers also use WSL2, and other POSIX platforms may be compatible but are untested. For development and deployment outside of a container, we recommend using a Python virtual environment to install the `requirements.txt`. The [Speech Batch Kit](https://github.com/microsoft/batch-processing-kit/blob/master/batchkit_examples/speech_sdk/README.md) example [builds a container](https://github.com/microsoft/batch-processing-kit/blob/master/batchkit_examples/speech_sdk/build-docker).
+
+## Tests
+
+This project uses both unit tests `run-tests` and stress tests `run-stress-tests` for functional verification.
+
+## Building
+
+There are currently 3 artifacts:
+
+- The pypi library of the batchkit framework as a library.
+
+
+- The pypi library of the batchkit-examples-speechsdk.
+- Docker container image for speech-batch-kit.
+
 
 # Examples
 
