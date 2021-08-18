@@ -3,13 +3,11 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-pip install batchkit batchkit_examples_speechsdk
-
-declare BATCHKIT_OLD=$(pip show batchkit | grep Version | cut -c10-16)
+declare BATCHKIT_OLD=$(yolk -V batchkit | cut -c10-100)
 declare BATCHKIT_NEW=$(python setup_batchkit.py --version)
 echo "INFO: Latest published 'batchkit' is version '$BATCHKIT_OLD'. New 'batchkit' is version '$BATCHKIT_NEW'"
 
-declare BATCHKIT_EX_OLD=$(pip show batchkit_examples_speechsdk | grep Version | cut -c10-16)
+declare BATCHKIT_EX_OLD=$(yolk -V batchkit_examples_speechsdk | cut -c10-100)
 declare BATCHKIT_EX_NEW=$(python setup_examples.py --version)
 echo "INFO: Latest published 'batchkit_examples_speechsdk' is version '$BATCHKIT_EX_OLD'. New 'batchkit_examples_speechsdk' is version '$BATCHKIT_EX_NEW'"
 

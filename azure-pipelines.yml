@@ -52,7 +52,7 @@ stages:
           source my_venv/bin/activate
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install twine wheel
+          pip install twine wheel yolk3k
     - task: CmdLine@2
       displayName: Build Python package
       inputs:
@@ -63,6 +63,7 @@ stages:
           ./ci/parse_package_versions
           echo "Building Python packages"
           . ci/build_packages
+          echo $BATCHKIT_EXAMPLES_PKG
     # NEED TO DELETE ECHOS
     - task: CmdLine@2
       displayName: Execute batchkit Python package unit and stress tests
