@@ -60,6 +60,7 @@ stages:
         script: |
           chmod 755 ci/parse_package_versions
           dos2unix ci/parse_package_versions
+          echo "Verifying Python packge versions updated"
           ./ci/parse_package_versions
           chmod 755 $(setupBatchkit) $(setupExamples)
           python $(setupBatchkit) sdist bdist_wheel
@@ -69,9 +70,12 @@ stages:
       condition: always()
       inputs:
         script: |
+          source my_venv/bin/activate
           chmod 755 run-stress-tests.py run-tests
           dos2unix run-tests
+          echo "Executing unit tests"
           ./run-tests
+          echo "Executing stress tests"
           python run-stress-tests.py
     - task: Docker@2
       displayName: Build Docker image
