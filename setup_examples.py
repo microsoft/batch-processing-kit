@@ -13,10 +13,13 @@ with open(os.path.join(rootdir, 'requirements.txt')) as reqs:
     required = reqs.read().splitlines()
 deps = [line for line in required if len(line) > 0 and line[0] != "#"]
 
+# define BATCHKIT_EXAMPLES_PKG environment variable
+name='batchkit_examples_speechsdk'
+os.environ['BATCHKIT_EXAMPLES_PKG'] = name
 
 # Package specification that includes every example.
 setup(
-    name='batchkit_examples_speechsdk',
+    name=name,
     version='0.9.9.dev0',
     author='Microsoft Azure',
     author_email='andwald@microsoft.com',
