@@ -57,6 +57,7 @@ stages:
       displayName: Build Python package
       inputs:
         script: |
+          source my_venv/bin/activate
           chmod 755 ci/parse_package_versions $(setupBatchkit) $(setupExamples)
           dos2unix ci/parse_package_versions ci/build_packages
           echo "Verifying Python package versions updated"
@@ -92,6 +93,7 @@ stages:
       displayName: Execute Speech Batch Kit sanity test
       inputs:
         script: |
+          source my_venv/bin/activate
           chmod 755 ci/speech_batch_kit_sanity_test
           dos2unix ci/speech_batch_kit_sanity_test
           pushd ci
