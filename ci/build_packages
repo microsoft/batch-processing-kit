@@ -1,0 +1,5 @@
+python $setupBatchkit sdist bdist_wheel
+python $setupExamples sdist bdist_wheel
+
+# define environment variable used in Dockerfile
+export BATCHKIT_EXAMPLES_PKG="batchkit_examples_speechsdk"

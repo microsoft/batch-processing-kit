@@ -10,7 +10,7 @@ stt_on_prem_2="stt-onprem-2"
 docker_port_1="5000"
 docker_port_2="5001"
 container_port="5000"
-temp_vol="temp_vol"
+temp_vol="test_vol"
 
 # pull stt Docker image
 docker pull $sttImageName
@@ -49,7 +49,7 @@ done
 # update config.yaml with speech container IP addresses 
 pushd $temp_vol
 
-sudo rm config.yaml
+sudo rm test_config.yaml
 echo "MyContainer1:
   concurrency: 2
   host: $ip1
@@ -57,7 +57,7 @@ echo "MyContainer1:
 MyContainer2:
   concurrency: 2
   host: $ip2
-  port: $container_port" >> config.yaml
+  port: $container_port" >> test_config.yaml
 popd
 
 # run batch processing container. container deleted after running

@@ -57,14 +57,12 @@ stages:
       displayName: Build Python package
       inputs:
         script: |
-          chmod 755 ci/parse_package_versions
-          dos2unix ci/parse_package_versions
-          echo "Verifying Python packge versions updated"
+          chmod 755 ci/parse_package_versions $(setupBatchkit) $(setupExamples)
+          dos2unix ci/parse_package_versions ci/build_packages
+          echo "Verifying Python package versions updated"
           ./ci/parse_package_versions
-          chmod 755 $(setupBatchkit) $(setupExamples)
-          python $(setupBatchkit) sdist bdist_wheel
-          python $(setupExamples) sdist bdist_wheel
-          echo $BATCHKIT_EXAMPLES_PKG
+          echo "Building Python packages"
+          ./ci/build_packages
     # NEED TO DELETE ECHOS
     - task: CmdLine@2
       displayName: Execute batchkit Python package unit and stress tests

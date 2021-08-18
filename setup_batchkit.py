@@ -27,7 +27,6 @@ for line in required:
     elif len(line) > 0 and line[0] != "#" and toggle:
         deps.append(line)
 
-
 # Package specification for batchkit library.
 setup(
     name='batchkit',
