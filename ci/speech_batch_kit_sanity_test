@@ -63,7 +63,7 @@ popd
 # run batch processing container. container deleted after running
 echo "INFO: Sleeping for 15 seconds while waiting for speech-to-text containers to be ready"
 sleep 15
-docker run -t -i --rm --name batch_processing --volume "$(pwd)"/$temp_vol:/my_nfs batchkit/speech-batch-kit:latest -config /my_nfs/config.yaml -input_folder /my_nfs/audio_files -output_folder /my_nfs/transcriptions -log_folder /my_nfs/logs -file_log_level DEBUG -nbest 1 -m ONESHOT -diarization None -language en-US -strict_config
+docker run -t -i --rm --name batch_processing --volume "$(pwd)"/$temp_vol:/my_nfs --net=host batchkit/speech-batch-kit:latest -config /my_nfs/test_config.yaml -input_folder /my_nfs/test_audio_files -output_folder /my_nfs/transcriptions -log_folder /my_nfs/logs -file_log_level DEBUG -nbest 1 -m ONESHOT -diarization None -language en-US -strict_config -console_log_level DEBUG
 
 # use run_summary.json output log file to verify that number of endpoints equals input value and that all audio files successfully processed
 pushd $temp_vol/transcriptions

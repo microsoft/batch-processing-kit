@@ -25,7 +25,6 @@ resources:
 - repo: self
 
 variables:
-  dockerRegistryServiceConnection: '5b196e82-84a2-4819-9605-a94dae8a565c'
   containerRegistry: 'joshcacr.azurecr.io'
   setupBatchkit: 'setup_batchkit.py'
   setupExamples: 'setup_examples.py'
@@ -65,12 +64,15 @@ stages:
           chmod 755 $(setupBatchkit) $(setupExamples)
           python $(setupBatchkit) sdist bdist_wheel
           python $(setupExamples) sdist bdist_wheel
+          echo $BATCHKIT_EXAMPLES_PKG
+    # NEED TO DELETE ECHOS
     - task: CmdLine@2
       displayName: Execute batchkit Python package unit and stress tests
       condition: always()
       inputs:
         script: |
           source my_venv/bin/activate
+          echo $BATCHKIT_EXAMPLES_PKG
           chmod 755 run-stress-tests.py run-tests
           dos2unix run-tests
           echo "Executing unit tests"
@@ -86,7 +88,7 @@ stages:
         Dockerfile: batchkit_examples/speech_sdk/Dockerfile
         containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
-          latest
+          test
     - task: CmdLine@2
       displayName: Execute Speech Batch Kit sanity test
       inputs:

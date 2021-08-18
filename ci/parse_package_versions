@@ -13,16 +13,28 @@ declare BATCHKIT_EX_OLD=$(pip show batchkit_examples_speechsdk | grep Version | 
 declare BATCHKIT_EX_NEW=$(python setup_examples.py --version)
 echo "INFO: Latest published 'batchkit_examples_speechsdk' is version '$BATCHKIT_EX_OLD'. New 'batchkit_examples_speechsdk' is version '$BATCHKIT_EX_NEW'"
 
-if [ "$BATCHKIT_OLD" = "$BATCHKIT_NEW" ] && [ "$BATCHKIT_EX_OLD" = "$BATCHKIT_EX_NEW" ]
-then
-    echo "ERROR: Increment Python versions for 'batchkit' and 'batchkit_examples_speechsdk'. Current package versions are the same as published package versions"
-    exit 1
-elif [ "$BATCHKIT_OLD" = "$BATCHKIT_NEW" ]
+EXIT=false
+if [ "$BATCHKIT_OLD" = "$BATCHKIT_NEW" ]
 then 
-    echo "ERROR: Increment Python version for 'batchkit'. Current package version is the same as published package version"
-    exit 1
-elif [ "$BATCHKIT_EX_OLD" = "$BATCHKIT_EX_NEW" ]
+    echo "ERROR: Increment Python package version for 'batchkit'. Current package version is the same as published package version"
+    EXIT=true
+fi
+
+if [ "$BATCHKIT_EX_OLD" = "$BATCHKIT_EX_NEW" ]
 then 
-    echo "ERROR: Increment Python version for 'batchkit_examples_speechsdk'. Current package version is the same as published package version"
+    echo "ERROR: Increment Python package version for 'batchkit_examples_speechsdk'. Current package version is the same as published package version"
+    EXIT=true
+fi
+
+if [ "$BATCHKIT_NEW" != "$BATCHKIT_EX_NEW" ]
+then 
+    echo "ERROR: Python package versions for 'batchkit' and 'batchkit_examples_speechsdk' must match"
+    EXIT=true
+else
+    echo "INFO: Python package versions for 'batchkit' and 'batchkit_examples_speechsdk' match as expected"
+fi
+
+if [ "$EXIT" = true ]
+then 
     exit 1
 fi
