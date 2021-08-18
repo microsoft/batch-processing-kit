@@ -1,0 +1,92 @@
+#!/bin/bash
+
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+# declare variables
+sttImageName="mcr.microsoft.com/azure-cognitive-services/speechservices/speech-to-text"
+stt_on_prem_1="stt-onprem-1"
+stt_on_prem_2="stt-onprem-2"
+docker_port_1="5000"
+docker_port_2="5001"
+container_port="5000"
+temp_vol="temp_vol"
+
+# pull stt Docker image
+docker pull $sttImageName
+
+# run 2x speech-to-text Docker containers exposed on Docker ports 5000 and 5001 
+docker run --name $stt_on_prem_1 -it -d --rm -p $docker_port_1:$container_port --memory 4g --cpus 2 $sttImageName eula=accept Billing='https://westus2.api.cognitive.microsoft.com/sts/v1.0/issuetoken' Apikey='28c6cec5a7544cf8b1f7cf3427d4be09' CloudAI:SentimentAnalysisSettings:TextAnalyticsHost='https://westus2.api.cognitive.microsoft.com/text/analytics/v3.0/sentiment' CloudAI:SentimentAnalysisSettings:SentimentAnalysisApiKey='286be3fde35540b09d8c34f2a71224f3'
+docker run --name $stt_on_prem_2 -it -d --rm -p $docker_port_2:$container_port --memory 4g --cpus 2 $sttImageName eula=accept Billing='https://westus2.api.cognitive.microsoft.com/sts/v1.0/issuetoken' Apikey='28c6cec5a7544cf8b1f7cf3427d4be09' CloudAI:SentimentAnalysisSettings:TextAnalyticsHost='https://westus2.api.cognitive.microsoft.com/text/analytics/v3.0/sentiment' CloudAI:SentimentAnalysisSettings:SentimentAnalysisApiKey='286be3fde35540b09d8c34f2a71224f3'
+
+# get IP addresses of speech-to-text containers when available
+finished=0
+while [[ $finished != 1 ]]; do
+    response=$(curl --write-out '%{http_code}' --silent --output /dev/null "http://localhost:$docker_port_1/ready")
+    if [ $response = "200" ]; then
+        let finished=1
+        ip1=$(docker inspect $stt_on_prem_1 --format '{{ .NetworkSettings.IPAddress }}')
+        echo "INFO: Fetched IP address of first speech-to-text container"
+    else
+        echo "INFO: Waiting for first speech-to-text container to start"
+    fi
+    sleep 1
+done
+
+finished=0
+while [[ $finished != 1 ]]; do
+    response=$(curl --write-out '%{http_code}' --silent --output /dev/null "http://localhost:$docker_port_2/ready")
+    if [ $response = "200" ]; then
+        let finished=1
+        ip2=$(docker inspect $stt_on_prem_2 --format '{{ .NetworkSettings.IPAddress }}')
+        echo "INFO: Fetched IP address of second speech-to-text container"
+    else
+        echo "INFO: Waiting for second speech-to-text container to start"
+    fi
+    sleep 1
+done
+
+# update config.yaml with speech container IP addresses 
+pushd $temp_vol
+
+sudo rm config.yaml
+echo "MyContainer1:
+  concurrency: 2
+  host: $ip1
+  port: $container_port
+MyContainer2:
+  concurrency: 2
+  host: $ip2
+  port: $container_port" >> config.yaml
+popd
+
+# run batch processing container. container deleted after running
+echo "INFO: Sleeping for 15 seconds while waiting for speech-to-text containers to be ready"
+sleep 15
+docker run -t -i --rm --name batch_processing --volume "$(pwd)"/$temp_vol:/my_nfs batchkit/speech-batch-kit:latest -config /my_nfs/config.yaml -input_folder /my_nfs/audio_files -output_folder /my_nfs/transcriptions -log_folder /my_nfs/logs -file_log_level DEBUG -nbest 1 -m ONESHOT -diarization None -language en-US -strict_config
+
+# use run_summary.json output log file to verify that number of endpoints equals input value and that all audio files successfully processed
+pushd $temp_vol/transcriptions
+
+num_endpoints=$(sudo jq .overall_summary.audio_stats.num_endpoints run_summary.json)
+audio_files_passed=$(sudo jq .overall_summary.file_stats.passed run_summary.json)
+audio_files_total=$(sudo jq .overall_summary.file_stats.total run_summary.json)
+
+if [ $num_endpoints = "2" ] && [ $audio_files_passed = $audio_files_total ]
+then 
+    echo "INFO: Speech Batch Kit sanity test passed"
+elif [ $num_endpoints = "2" ] && [ $audio_files_passed != $audio_files_total ] 
+then
+    echo "ERROR: Speech Batch Kit sanity test failed. $audio_files_passed out of $audio_files_total audio files were successfully processed"
+elif [ $num_endpoints != "2" ] && [ $audio_files_passed = $audio_files_total ]
+then 
+    echo "ERROR: Speech Batch Kit sanity test failed. $num_endpoints (not 2) endpoint was used to process audio files"
+fi
+popd
+
+# remove bind mount directory and stop on-premise speech-to-text Docker containers 
+sudo rm -rf $temp_vol/logs 
+sudo rm -rf $temp_vol/transcriptions 
+docker stop $stt_on_prem_1
+docker stop $stt_on_prem_2
+echo "INFO: Deleted bind mount directory and stopped on-premise speech-to-text Docker containers"

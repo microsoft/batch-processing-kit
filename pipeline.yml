@@ -1,0 +1,116 @@
+trigger:
+  branches:
+    include:
+    - master
+  paths:
+    exclude:
+    - CODE_OF_CONDUCT.md
+    - CONTRIBUTING.md
+    - LICENSE
+    - README.md
+    - SECURITY.md
+pr:
+  branches:
+    include:
+    - master
+  paths:
+    exclude:
+    - CODE_OF_CONDUCT.md
+    - CONTRIBUTING.md
+    - LICENSE
+    - README.md
+    - SECURITY.md
+
+resources:
+- repo: self
+
+variables:
+  dockerRegistryServiceConnection: '5b196e82-84a2-4819-9605-a94dae8a565c'
+  containerRegistry: 'joshcacr.azurecr.io'
+  setupBatchkit: 'setup_batchkit.py'
+  setupExamples: 'setup_examples.py'
+  vmImageName: 'ubuntu-20.04'
+  imageName: 'batchkit/speech-batch-kit'
+
+stages:
+- stage: BuildTestRelease 
+  displayName: Build, Test, and Release Python packages and Docker image in single stage
+  jobs:   
+  - job: BuildTestRelease
+    displayName: Build, Test, and Release Python packages and Docker image in single job
+    pool:
+      vmImage: $(vmImageName)
+    steps:
+
+# BUILD AND TEST PIPELINE TASKS
+    - task: CmdLine@2
+      displayName: Setup Python virtual environment and install required packages Python package
+      inputs:
+        script: |
+          sudo apt-get install dos2unix
+          sudo apt-get install -y python3-venv
+          python -m venv my_venv
+          source my_venv/bin/activate
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install twine wheel
+#     - task: CmdLine@2
+#       displayName: Build Python package
+#       inputs:
+#         script: |
+#           chmod 755 ci/parse_package_versions
+#           dos2unix ci/parse_package_versions
+#           ./ci/parse_package_versions
+#           chmod 755 $(setupBatchkit) $(setupExamples)
+#           python $(setupBatchkit) sdist bdist_wheel
+#           python $(setupExamples) sdist bdist_wheel
+#     - task: CmdLine@2
+#       displayName: Execute batchkit Python package unit and stress tests
+#       condition: always()
+#       inputs:
+#         script: |
+#           chmod 755 run-stress-tests.py run-tests
+#           dos2unix run-tests
+#           ./run-tests
+#           python run-stress-tests.py
+#     # NEED TO CHANGE imageName variable to 'batchkit/speech-batch-kit'
+#     - task: Docker@2
+#       displayName: Build Docker image
+#       condition: always()
+#       inputs:
+#         command: build
+#         repository: $(imageName)
+#         Dockerfile: batchkit_examples/speech_sdk/Dockerfile
+#         containerRegistry: $(dockerRegistryServiceConnection)
+#         tags: |
+#           latest
+#     - task: CmdLine@2
+#       displayName: Execute Speech Batch Kit sanity test
+#       inputs:
+#         script: |
+#           chmod 755 ci/speech_batch_kit_sanity_test
+#           dos2unix ci/speech_batch_kit_sanity_test
+#           pushd ci
+#           ./speech_batch_kit_sanity_test
+#           popd
+
+# # RELEASE PIPELINE TASKS
+# # NEED TO CHANGE PYPI_API_TOKEN variable to actual token
+#     - task: CmdLine@2
+#       displayName: Publish Python packages
+#       condition: eq(variables['Build.Reason'], 'PullRequest')
+#       inputs:
+#         script: |
+#           source my_venv/bin/activate
+#           python -m pip install --upgrade pip
+#           twine check dist/*
+#           twine upload dist/* -u __token__ -p $(PYPI_API_TOKEN)
+#     - task: Docker@2
+#       displayName: Push Docker image
+#       condition: eq(variables['Build.Reason'], 'PullRequest')
+#       inputs:
+#         command: push
+#         repository: $(imageName)
+#         containerRegistry: $(dockerRegistryServiceConnection)
+#         tags: |
+#           latest
