@@ -23,7 +23,6 @@ RUN ls -a && \
     echo ${INTERMED_VAR}-* && \
     echo ${BATCHKIT_EXAMPLES_PKG}-* && \
     echo $INTERMED_VAR
-COPY dist/${BATCHKIT_EXAMPLES_PKG}-* /
 COPY dist/${"$(BATCHKIT_EXAMPLES_PKG)"}-* /
 RUN ls -a
 COPY dist/${INTERMED_VAR}-* /
