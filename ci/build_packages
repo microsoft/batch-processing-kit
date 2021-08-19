@@ -2,24 +2,15 @@
 
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+
+echo "environment variable: $setupBatchkit" 
+
 echo "FIRST"
-python $(setupBatchkit) sdist bdist_wheel
-python $(setupExamples) sdist bdist_wheel
+python $setupBatchkit sdist bdist_wheel
+python $setupExamples sdist bdist_wheel
 
 echo "SECOND"
-python3 $(setupBatchkit) sdist bdist_wheel
+python $setupBatchkit2 sdist bdist_wheel
 
 echo "THIRD"
-python "$(setupBatchkit)" sdist bdist_wheel
-
-echo "FOURTH"
-python3 "$(setupBatchkit)" sdist bdist_wheel
-
-echo "FIFTH"
-python $setupBatchkit sdist bdist_wheel
-
-echo "SIXTH"
-python3 $setupBatchkit sdist bdist_wheel
-
-# define environment variable used in Dockerfile
-export BATCHKIT_EXAMPLES_PKG="batchkit_examples_speechsdk"
+python ${setupBatchkit} sdist bdist_wheel

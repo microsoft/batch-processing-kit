@@ -27,7 +27,8 @@ resources:
 variables:
   containerRegistry: 'joshcacr.azurecr.io'
   setupBatchkit: 'setup_batchkit.py'
-  setupExamples: 'setup_examples.py'
+  setupBatchkit2: "setup_batchkit.py"
+  setupExamples: setup_examples.py
   vmImageName: 'ubuntu-20.04'
   imageName: 'batchkit/speech-batch-kit'
 
@@ -48,6 +49,7 @@ stages:
         script: |
           sudo apt-get install dos2unix
           sudo apt-get install -y python3-venv
+          sudo apt install python-is-python3
           python -m venv my_venv
           source my_venv/bin/activate
           python -m pip install --upgrade pip
@@ -89,6 +91,7 @@ stages:
         containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
           test
+        arguments: --build-arg BATCHKIT_EXAMPLES_PKG='batchkit_examples_speechsdk'
     - task: CmdLine@2
       displayName: Execute Speech Batch Kit sanity test
       inputs:
