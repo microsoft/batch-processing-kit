@@ -18,6 +18,9 @@ RUN apt-get update -y && \
 ARG TEST="test"
 COPY tests/${TEST}_* /
 COPY dist /
+COPY dist/batchkit_examples_speechsdk-0.9.9.dev0.tar.gz /
+RUN ls -a && \
+    exit 1
 ARG BATCHKIT_EXAMPLES_PKG="batchkit_examples_speechsdk"
 COPY dist/${BATCHKIT_EXAMPLES_PKG}-* /
 RUN ls -a && \
