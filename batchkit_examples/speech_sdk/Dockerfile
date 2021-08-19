@@ -16,7 +16,7 @@ RUN apt-get update -y && \
         libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly python3-gst-1.0
 ARG BATCHKIT_EXAMPLES_PKG='batchkit_examples_speechsdk'
 ARG INTERMED_VAR=$(BATCHKIT_EXAMPLES_PKG)
-RUN ls -a $$ \
+RUN ls -a && \
     echo ${INTERMED_VAR}-* && \
     echo $(BATCHKIT_EXAMPLES_PKG) && \
     echo $(INTERMED_VAR) && \
