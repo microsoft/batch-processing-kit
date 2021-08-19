@@ -16,6 +16,7 @@ RUN apt-get update -y && \
         libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly python3-gst-1.0
 
 # value for BATCHKIT_EXAMPLES_PKG should be passed in on build using --build-arg command
+# temp comment
 ARG BATCHKIT_EXAMPLES_PKG='batchkit_examples_speechsdk'
 
 # batchkit_examples_speechsdk-0.9.9.dev0-py3-none-any.whl
