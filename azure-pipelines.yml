@@ -119,17 +119,16 @@ stages:
           ls -a
           docker images
           docker ps -a
-    - task: CmdLine@2
-      displayName: Execute Speech Batch Kit sanity test
-      inputs:
-        script: |
-          source my_venv/bin/activate
-          chmod 755 ci/speech_batch_kit_sanity_test
-          dos2unix ci/speech_batch_kit_sanity_test
-          pushd ci
-          ./speech_batch_kit_sanity_test
-          popd
-          docker tag batchkit/speech-batch-kit:test batchkit/speech-batch-kit:latest
+    # - task: CmdLine@2
+    #   displayName: Execute Speech Batch Kit sanity test
+    #   inputs:
+    #     script: |
+    #       source my_venv/bin/activate
+    #       chmod 755 ci/speech_batch_kit_sanity_test
+    #       dos2unix ci/speech_batch_kit_sanity_test
+    #       pushd ci
+    #       ./speech_batch_kit_sanity_test
+    #       popd
 
 # RELEASE PIPELINE TASKS
     # - task: CmdLine@2
@@ -145,6 +144,16 @@ stages:
     #       python -m pip install --upgrade pip
     #       twine check dist/*
     #       twine upload dist/* -u __token__ -p $PYPI_API_TOKEN
+    - task: Docker@2
+      displayName: Push Docker image
+      # condition: eq(variables['Build.Reason'], 'PullRequest')
+      # secret variables must be called with $() notation outside of bash and Powershell script tasks
+      inputs:
+        command: push
+        repository: $(imageName)
+        containerRegistry: $(dockerRegistryServiceConnection)
+        tags: |
+          test
     - task: Docker@2
       displayName: Push Docker image
       # condition: eq(variables['Build.Reason'], 'PullRequest')

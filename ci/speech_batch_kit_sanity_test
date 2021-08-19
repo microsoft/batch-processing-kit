@@ -65,10 +65,6 @@ echo "INFO: Sleeping for 15 seconds while waiting for speech-to-text containers 
 sleep 15
 echo "FIRST TRY"
 docker run --rm --name batch_processing --volume "$(pwd)"/$temp_vol:/my_nfs --net=host batchkit/speech-batch-kit:test -config /my_nfs/test_config.yaml -input_folder /my_nfs/test_audio_files -output_folder /my_nfs/transcriptions -log_folder /my_nfs/logs -file_log_level DEBUG -nbest 1 -m ONESHOT -diarization None -language en-US -strict_config -console_log_level DEBUG
-echo "SECOND TRY"
-docker run --rm --name batch_processing --volume "$(pwd)"/$temp_vol:/my_nfs --net=host ***/batchkit/speech-batch-kit:test -config /my_nfs/test_config.yaml -input_folder /my_nfs/test_audio_files -output_folder /my_nfs/transcriptions -log_folder /my_nfs/logs -file_log_level DEBUG -nbest 1 -m ONESHOT -diarization None -language en-US -strict_config -console_log_level DEBUG
-echo "THIRD TRY"
-docker run --rm --name batch_processing --volume "$(pwd)"/$temp_vol:/my_nfs ***/batchkit/speech-batch-kit:test -config /my_nfs/test_config.yaml -input_folder /my_nfs/test_audio_files -output_folder /my_nfs/transcriptions -log_folder /my_nfs/logs -file_log_level DEBUG -nbest 1 -m ONESHOT -diarization None -language en-US -strict_config -console_log_level DEBUG
 
 pushd $temp_vol/transcriptions
 
