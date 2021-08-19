@@ -111,6 +111,15 @@ stages:
           test
         # arguments: --build-arg BATCHKIT_EXAMPLES_PKG='batchkit_examples_speechsdk'
     - task: CmdLine@2
+      displayName: Print current contents
+      condition: always()
+      inputs:
+        script: |
+          source my_venv/bin/activate
+          ls -a
+          docker images
+          docker ps -a
+    - task: CmdLine@2
       displayName: Execute Speech Batch Kit sanity test
       inputs:
         script: |
