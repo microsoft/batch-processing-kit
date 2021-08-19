@@ -105,7 +105,6 @@ stages:
         command: build
         repository: $(imageName)
         Dockerfile: batchkit_examples/speech_sdk/Dockerfile
-        containerRegistry: $(dockerRegistryServiceConnection)
         buildContext: $(Build.Repository.LocalPath)
         tags: |
           test
@@ -132,19 +131,24 @@ stages:
           popd
           docker tag batchkit/speech-batch-kit:test batchkit/speech-batch-kit:latest
 
-# # RELEASE PIPELINE TASKS
-#     - task: CmdLine@2
-#       displayName: Publish Python packages
-#       condition: eq(variables['Build.Reason'], 'PullRequest')
-#       inputs:
-#         script: |
-#           source my_venv/bin/activate
-#           python -m pip install --upgrade pip
-#           twine check dist/*
-#           twine upload dist/* -u __token__ -p $(PYPI_API_TOKEN)
+# RELEASE PIPELINE TASKS
+    # - task: CmdLine@2
+    #   displayName: Publish Python packages
+    #   condition: eq(variables['Build.Reason'], 'PullRequest')
+
+    #   # use env to map secret variables to an env variable with bash and Powershell scripts
+    #   env: 
+    #     PYPI_API_TOKEN: $(PYPI_API_TOKEN)
+    #   inputs:
+    #     script: |
+    #       source my_venv/bin/activate
+    #       python -m pip install --upgrade pip
+    #       twine check dist/*
+    #       twine upload dist/* -u __token__ -p $PYPI_API_TOKEN
     - task: Docker@2
       displayName: Push Docker image
       # condition: eq(variables['Build.Reason'], 'PullRequest')
+      # secret variables must be called with $() notation outside of bash and Powershell script tasks
       inputs:
         command: push
         repository: $(imageName)
