@@ -106,7 +106,8 @@ stages:
         repository: $(imageName)
         Dockerfile: batchkit_examples/speech_sdk/Dockerfile
         containerRegistry: $(dockerRegistryServiceConnection)
-        buildContext: $(Build.Repository.LocalPath)
+        # buildContext: $(Build.Repository.LocalPath)
+        buildContext: .
         tags: |
           test
         arguments: --build-arg BATCHKIT_EXAMPLES_PKG='batchkit_examples_speechsdk'
