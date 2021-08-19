@@ -27,8 +27,9 @@ resources:
 variables:
   containerRegistry: 'joshcacr.azurecr.io'
   setupBatchkit: 'setup_batchkit.py'
-  setupBatchkit2: "setup_batchkit.py"
-  setupExamples: setup_examples.py
+  setupBatchkit2: setup_batchkit.py
+  setupExamples: 'setup_examples.py'
+  setupExamples2: "setup_examples"
   vmImageName: 'ubuntu-20.04'
   imageName: 'batchkit/speech-batch-kit'
 
@@ -60,12 +61,25 @@ stages:
       inputs:
         script: |
           source my_venv/bin/activate
-          chmod 755 ci/parse_package_versions $(setupBatchkit) $(setupExamples)
+          chmod 755 ci/parse_package_versions $(setupBatchkit) $(setupExamples) $(setupBatchkit2)
           dos2unix ci/parse_package_versions ci/build_packages
           echo "Verifying Python package versions updated"
           ./ci/parse_package_versions
           echo "Building Python packages"
           . ci/build_packages
+          echo $BATCHKIT_EXAMPLES_PKG
+    - task: CmdLine@2
+      displayName: Build Python package AGAIN
+      inputs:
+        script: |
+          source my_venv/bin/activate
+          chmod 755 ci/parse_package_versions $(setupBatchkit) $(setupExamples) $(setupBatchkit2)
+          dos2unix ci/parse_package_versions ci/build_packages
+          echo "Verifying Python package versions updated"
+          ./ci/parse_package_versions
+          echo "Building Python packages"
+          python $(setupBatchkit) sdist bdist_wheel
+          python $(setupExamples) sdist bdist_wheel
           echo $BATCHKIT_EXAMPLES_PKG
     # NEED TO DELETE ECHOS
     - task: CmdLine@2

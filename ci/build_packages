@@ -4,6 +4,8 @@
 # Licensed under the MIT License.
 
 echo "environment variable: $setupBatchkit" 
+echo "environment variable: $(setupBatchkit)" 
+
 
 echo "FIRST"
 python $setupBatchkit sdist bdist_wheel
@@ -14,3 +16,6 @@ python $setupBatchkit2 sdist bdist_wheel
 
 echo "THIRD"
 python ${setupBatchkit} sdist bdist_wheel
+
+echo "FOURTH"
+python $(setupExamples2).py sdist bdist_wheel
