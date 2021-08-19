@@ -32,6 +32,7 @@ variables:
   setupExamples2: "setup_examples"
   vmImageName: 'ubuntu-20.04'
   imageName: 'batchkit/speech-batch-kit'
+  # imageName: 'joshcacr.azurecr.io/speech-batch-kit'
 
 stages:
 - stage: BuildTestRelease 
@@ -120,16 +121,18 @@ stages:
           ls -a
           docker images
           docker ps -a
-    # - task: CmdLine@2
-    #   displayName: Execute Speech Batch Kit sanity test
-    #   inputs:
-    #     script: |
-    #       source my_venv/bin/activate
-    #       chmod 755 ci/speech_batch_kit_sanity_test
-    #       dos2unix ci/speech_batch_kit_sanity_test
-    #       pushd ci
-    #       ./speech_batch_kit_sanity_test
-    #       popd
+
+# need to add container registry to tag path: containerRegistry: 'joshcacr.azurecr.io'
+    - task: CmdLine@2
+      displayName: Execute Speech Batch Kit sanity test
+      inputs:
+        script: |
+          source my_venv/bin/activate
+          chmod 755 ci/speech_batch_kit_sanity_test
+          dos2unix ci/speech_batch_kit_sanity_test
+          pushd ci
+          ./speech_batch_kit_sanity_test
+          popd
 
 # RELEASE PIPELINE TASKS
     # - task: CmdLine@2
@@ -157,6 +160,7 @@ stages:
           test
     - task: Docker@2
       displayName: Push Docker image
+      condition: always()
       # condition: eq(variables['Build.Reason'], 'PullRequest')
       # secret variables must be called with $() notation outside of bash and Powershell script tasks
       inputs:
