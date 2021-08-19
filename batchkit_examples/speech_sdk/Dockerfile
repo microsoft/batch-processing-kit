@@ -19,9 +19,9 @@ ARG TEST="test"
 COPY tests/${TEST}_* /
 COPY dist /
 ARG BATCHKIT_EXAMPLES_PKG="batchkit_examples_speechsdk"
+COPY dist/${BATCHKIT_EXAMPLES_PKG}-* /
 RUN ls -a && \
     exit 1
-COPY dist/${BATCHKIT_EXAMPLES_PKG}-* /
 RUN ls -a && \
     python3 -m pip install setuptools wheel && \
     python3 -m pip install ${INTERMED_VAR}-*.whl && \
