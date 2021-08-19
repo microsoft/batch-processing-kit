@@ -109,7 +109,7 @@ stages:
         buildContext: $(Build.Repository.LocalPath)
         tags: |
           test
-        arguments: --build-arg BATCHKIT_EXAMPLES_PKG='batchkit_examples_speechsdk'
+        # arguments: --build-arg BATCHKIT_EXAMPLES_PKG='batchkit_examples_speechsdk'
     - task: CmdLine@2
       displayName: Execute Speech Batch Kit sanity test
       inputs:
