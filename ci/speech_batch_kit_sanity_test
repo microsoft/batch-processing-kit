@@ -20,45 +20,45 @@ temp_vol="test_vol"
 # docker run --name $stt_on_prem_2 -it -d --rm -p $docker_port_2:$container_port --memory 4g --cpus 2 $sttImageName eula=accept Billing='https://westus2.api.cognitive.microsoft.com/sts/v1.0/issuetoken' Apikey='28c6cec5a7544cf8b1f7cf3427d4be09' CloudAI:SentimentAnalysisSettings:TextAnalyticsHost='https://westus2.api.cognitive.microsoft.com/text/analytics/v3.0/sentiment' CloudAI:SentimentAnalysisSettings:SentimentAnalysisApiKey='286be3fde35540b09d8c34f2a71224f3'
 
 # get IP addresses of speech-to-text containers when available
-finished=0
-while [[ $finished != 1 ]]; do
-    response=$(curl --write-out '%{http_code}' --silent --output /dev/null "http://localhost:$docker_port_1/ready")
-    if [ $response = "200" ]; then
-        let finished=1
-        ip1=$(docker inspect $stt_on_prem_1 --format '{{ .NetworkSettings.IPAddress }}')
-        echo "INFO: Fetched IP address of first speech-to-text container"
-    else
-        echo "INFO: Waiting for first speech-to-text container to start"
-    fi
-    sleep 1
-done
+# finished=0
+# while [[ $finished != 1 ]]; do
+#     response=$(curl --write-out '%{http_code}' --silent --output /dev/null "http://localhost:$docker_port_1/ready")
+#     if [ $response = "200" ]; then
+#         let finished=1
+#         ip1=$(docker inspect $stt_on_prem_1 --format '{{ .NetworkSettings.IPAddress }}')
+#         echo "INFO: Fetched IP address of first speech-to-text container"
+#     else
+#         echo "INFO: Waiting for first speech-to-text container to start"
+#     fi
+#     sleep 1
+# done
 
-finished=0
-while [[ $finished != 1 ]]; do
-    response=$(curl --write-out '%{http_code}' --silent --output /dev/null "http://localhost:$docker_port_2/ready")
-    if [ $response = "200" ]; then
-        let finished=1
-        ip2=$(docker inspect $stt_on_prem_2 --format '{{ .NetworkSettings.IPAddress }}')
-        echo "INFO: Fetched IP address of second speech-to-text container"
-    else
-        echo "INFO: Waiting for second speech-to-text container to start"
-    fi
-    sleep 1
-done
+# finished=0
+# while [[ $finished != 1 ]]; do
+#     response=$(curl --write-out '%{http_code}' --silent --output /dev/null "http://localhost:$docker_port_2/ready")
+#     if [ $response = "200" ]; then
+#         let finished=1
+#         ip2=$(docker inspect $stt_on_prem_2 --format '{{ .NetworkSettings.IPAddress }}')
+#         echo "INFO: Fetched IP address of second speech-to-text container"
+#     else
+#         echo "INFO: Waiting for second speech-to-text container to start"
+#     fi
+#     sleep 1
+# done
 
 # update config.yaml with speech container IP addresses 
-pushd $temp_vol
+# pushd $temp_vol
 
-sudo rm test_config.yaml
-echo "MyContainer1:
-  concurrency: 2
-  host: $ip1
-  port: $container_port
-MyContainer2:
-  concurrency: 2
-  host: $ip2
-  port: $container_port" >> test_config.yaml
-popd
+# sudo rm test_config.yaml
+# echo "MyContainer1:
+#   concurrency: 2
+#   host: $ip1
+#   port: $container_port
+# MyContainer2:
+#   concurrency: 2
+#   host: $ip2
+#   port: $container_port" >> test_config.yaml
+# popd
 
 # run batch processing container. container deleted after running
 echo "INFO: Sleeping for 15 seconds while waiting for speech-to-text containers to be ready"
