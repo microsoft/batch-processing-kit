@@ -14,7 +14,7 @@ RUN apt-get update -y && \
         python3 python3-pip python3-dev \
         libglib2.0 libgirepository1.0 libasound2 sox \
         libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly python3-gst-1.0
-ARG BATCHKIT_EXAMPLES_PKG='batchkit_examples_speechsdk'
+ARG BATCHKIT_EXAMPLES_PKG="batchkit_examples_speechsdk"
 RUN echo $(BATCHKIT_EXAMPLES_PKG) 
 ARG INTERMED_VAR=$(BATCHKIT_EXAMPLES_PKG)
 RUN ls -a && \
@@ -24,6 +24,7 @@ RUN ls -a && \
     echo ${BATCHKIT_EXAMPLES_PKG}-* && \
     echo $INTERMED_VAR
 COPY dist/${BATCHKIT_EXAMPLES_PKG}-* /
+COPY dist/${"$(BATCHKIT_EXAMPLES_PKG)"}-* /
 RUN ls -a
 COPY dist/${INTERMED_VAR}-* /
 RUN ls -a && \
