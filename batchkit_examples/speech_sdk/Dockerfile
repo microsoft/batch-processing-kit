@@ -17,18 +17,15 @@ RUN apt-get update -y && \
 
 ARG TEST="test"
 COPY tests/${TEST}_* /
-RUN ls -a && \
-    exit 1
-
 ARG BATCHKIT_EXAMPLES_PKG="batchkit_examples_speechsdk"
 ARG INTERMED_VAR=$(BATCHKIT_EXAMPLES_PKG)
-COPY dist/${"$(BATCHKIT_EXAMPLES_PKG)"}-* /
+COPY dist/${BATCHKIT_EXAMPLES_PKG}-* /
 RUN ls -a && \
     # echo $(INTERMED_VAR) && \
     # echo $(BATCHKIT_EXAMPLES_PKG) && \
     echo ${INTERMED_VAR}-* && \
     echo ${BATCHKIT_EXAMPLES_PKG}-* && \
-    echo $INTERMED_VAR
+    exit 1
 COPY dist/${INTERMED_VAR}-* /
 RUN ls -a && \
     python3 -m pip install setuptools wheel && \
