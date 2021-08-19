@@ -19,6 +19,8 @@ RUN apt-get update -y && \
 ARG BATCHKIT_EXAMPLES_PKG='batchkit_examples_speechsdk'
 
 # batchkit_examples_speechsdk-0.9.9.dev0-py3-none-any.whl
+COPY tests / 
+
 COPY dist_test / 
 RUN ls -a && \
     echo "Batchkit examples pgk environment variable: ${BATCHKIT_EXAMPLES_PKG}"
