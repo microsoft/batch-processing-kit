@@ -17,10 +17,13 @@ RUN apt-get update -y && \
 
 # value for BATCHKIT_EXAMPLES_PKG should be passed in on build using --build-arg command
 ARG BATCHKIT_EXAMPLES_PKG='batchkit_examples_speechsdk'
+
+# batchkit_examples_speechsdk-0.9.9.dev0-py3-none-any.whl
+COPY dist / 
 RUN ls -a && \
-    echo "Batchkit examples pgk environment variable: ${BATCHKIT_EXAMPLES_PKG}"
+    echo "Batchkit examples pgk environment variable: ${BATCHKIT_EXAMPLES_PKG}" && \
+    ls dist -a
 COPY dist/${BATCHKIT_EXAMPLES_PKG}-* /
-# COPY dist / 
 RUN python3 -m pip install setuptools wheel && \
     python3 -m pip install ${BATCHKIT_EXAMPLES_PKG}-*.whl && \
     echo "Building file directly" && \
