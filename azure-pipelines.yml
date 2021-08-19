@@ -105,6 +105,7 @@ stages:
         command: build
         repository: $(imageName)
         Dockerfile: batchkit_examples/speech_sdk/Dockerfile
+        containerRegistry: $(dockerRegistryServiceConnection)
         buildContext: $(Build.Repository.LocalPath)
         tags: |
           test
