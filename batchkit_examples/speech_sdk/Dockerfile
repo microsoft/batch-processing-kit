@@ -16,8 +16,6 @@ RUN apt-get update -y && \
         libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly python3-gst-1.0
 ARG BATCHKIT_EXAMPLES_PKG="batchkit_examples_speechsdk"
 COPY dist/${BATCHKIT_EXAMPLES_PKG}-* /
-RUN ls -a && \
-    python3 -m pip install setuptools wheel && \
+RUN python3 -m pip install setuptools wheel && \
     python3 -m pip install ${BATCHKIT_EXAMPLES_PKG}-*.whl && \
-    exit 1
 ENTRYPOINT ["run-batch-client"]
