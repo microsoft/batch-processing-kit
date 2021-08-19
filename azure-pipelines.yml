@@ -81,6 +81,7 @@ stages:
           python $(setupBatchkit) sdist bdist_wheel
           python $(setupExamples) sdist bdist_wheel
           echo $BATCHKIT_EXAMPLES_PKG
+          ls -a
     # NEED TO DELETE ECHOS
     - task: CmdLine@2
       displayName: Execute batchkit Python package unit and stress tests
@@ -95,6 +96,7 @@ stages:
           ./run-tests
           echo "Executing stress tests"
           python run-stress-tests.py
+          ls -a
     - task: Docker@2
       displayName: Build Docker image
       condition: always()
