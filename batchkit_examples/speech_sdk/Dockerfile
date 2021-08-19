@@ -17,5 +17,6 @@ RUN apt-get update -y && \
 ARG BATCHKIT_EXAMPLES_PKG="batchkit_examples_speechsdk"
 COPY dist/${BATCHKIT_EXAMPLES_PKG}-* /
 RUN python3 -m pip install setuptools wheel && \
-    python3 -m pip install ${BATCHKIT_EXAMPLES_PKG}-*.whl && \
+    python3 -m pip install ${BATCHKIT_EXAMPLES_PKG}-*.whl
+    
 ENTRYPOINT ["run-batch-client"]
