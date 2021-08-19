@@ -12,7 +12,7 @@ docker_port_2="5001"
 container_port="5000"
 temp_vol="test_vol"
 
-# pull stt Docker image
+# pull speech-to-text Docker image
 docker pull $sttImageName
 
 # run 2x speech-to-text Docker containers exposed on Docker ports 5000 and 5001 
@@ -64,14 +64,23 @@ popd
 echo "INFO: Sleeping for 15 seconds while waiting for speech-to-text containers to be ready"
 sleep 15
 docker run -t -i --rm --name batch_processing --volume "$(pwd)"/$temp_vol:/my_nfs --net=host batchkit/speech-batch-kit:test -config /my_nfs/test_config.yaml -input_folder /my_nfs/test_audio_files -output_folder /my_nfs/transcriptions -log_folder /my_nfs/logs -file_log_level DEBUG -nbest 1 -m ONESHOT -diarization None -language en-US -strict_config -console_log_level DEBUG
+docker run -t -i --rm --name batch_processing --volume "$(pwd)"/$temp_vol:/my_nfs batchkit/speech-batch-kit:test -config /my_nfs/test_config.yaml -input_folder /my_nfs/test_audio_files -output_folder /my_nfs/transcriptions -log_folder /my_nfs/logs -file_log_level DEBUG -nbest 1 -m ONESHOT -diarization None -language en-US -strict_config -console_log_level DEBUG
 
-# use run_summary.json output log file to verify that number of endpoints equals input value and that all audio files successfully processed
 pushd $temp_vol/transcriptions
 
+# fetch the number of IP address endpoints, number of audio files that were successfully processed, and total number of processed audio files from the speech-batch-kit container logs
+# if container did not start properly, all of the commands below will fail, and task will exit 
 num_endpoints=$(sudo jq .overall_summary.audio_stats.num_endpoints run_summary.json)
 audio_files_passed=$(sudo jq .overall_summary.file_stats.passed run_summary.json)
 audio_files_total=$(sudo jq .overall_summary.file_stats.total run_summary.json)
+if [ $? != 0 ]; then
+    echo "ERROR: Container did not start properly or speech-batch-kit image directory structure modified"
+    exit 1
+fi
 
+# verify that speech-batch-kit container ran as expected. container ran as expected if...
+    # container processed audio files using both of the instantiated speech-to-text containers
+    # all processed audio files passed successfully 
 if [ $num_endpoints = "2" ] && [ $audio_files_passed = $audio_files_total ]
 then 
     echo "INFO: Speech Batch Kit sanity test passed"
@@ -84,7 +93,8 @@ then
 fi
 popd
 
-# remove bind mount directory and stop on-premise speech-to-text Docker containers 
+# sanity test complete
+# clean up environment by stopping and removing on-premise speech-to-text Docker containers 
 sudo rm -rf $temp_vol/logs 
 sudo rm -rf $temp_vol/transcriptions 
 docker stop $stt_on_prem_1

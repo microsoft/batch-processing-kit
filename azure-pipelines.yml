@@ -109,6 +109,7 @@ stages:
         buildContext: $(Build.Repository.LocalPath)
         tags: |
           test
+          latest
         # arguments: --build-arg BATCHKIT_EXAMPLES_PKG='batchkit_examples_speechsdk'
     - task: CmdLine@2
       displayName: Print current contents
@@ -129,6 +130,7 @@ stages:
           pushd ci
           ./speech_batch_kit_sanity_test
           popd
+          docker tag batchkit/speech-batch-kit:test batchkit/speech-batch-kit:latest
 
 # # RELEASE PIPELINE TASKS
 #     - task: CmdLine@2
@@ -140,12 +142,12 @@ stages:
 #           python -m pip install --upgrade pip
 #           twine check dist/*
 #           twine upload dist/* -u __token__ -p $(PYPI_API_TOKEN)
-#     - task: Docker@2
-#       displayName: Push Docker image
-#       condition: eq(variables['Build.Reason'], 'PullRequest')
-#       inputs:
-#         command: push
-#         repository: $(imageName)
-#         containerRegistry: $(dockerRegistryServiceConnection)
-#         tags: |
-#           latest
+    - task: Docker@2
+      displayName: Push Docker image
+      # condition: eq(variables['Build.Reason'], 'PullRequest')
+      inputs:
+        command: push
+        repository: $(imageName)
+        containerRegistry: $(dockerRegistryServiceConnection)
+        tags: |
+          latest
