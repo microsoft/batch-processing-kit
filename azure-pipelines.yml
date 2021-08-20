@@ -27,7 +27,6 @@ resources:
 variables:
   containerRegistry: 'joshcacr.azurecr.io'
   setupBatchkit: 'setup_batchkit.py'
-  setupBatchkit2: setup_batchkit.py
   setupExamples: 'setup_examples.py'
   setupExamples2: "setup_examples"
   vmImageName: 'ubuntu-20.04'
@@ -59,10 +58,14 @@ stages:
           pip install twine wheel yolk3k
     - task: CmdLine@2
       displayName: Build Python package
+      env: 
+        setupBatchkit: $(setupBatchkit)
+        setupExamples: $(setupExamples)
+        setupExamples2: $(setupExamples2)
       inputs:
         script: |
           source my_venv/bin/activate
-          chmod 755 ci/parse_package_versions $(setupBatchkit) $(setupExamples) $(setupBatchkit2)
+          chmod 755 ci/parse_package_versions $setupBatchkit $setupExamples $setupExamples2
           dos2unix ci/parse_package_versions ci/build_packages
           echo "Verifying Python package versions updated"
           ./ci/parse_package_versions
