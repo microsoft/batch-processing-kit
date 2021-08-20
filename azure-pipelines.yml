@@ -158,14 +158,3 @@ stages:
         containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
           test
-    - task: Docker@2
-      displayName: Push Docker image
-      condition: always()
-      # condition: eq(variables['Build.Reason'], 'PullRequest')
-      # secret variables must be called with $() notation outside of bash and Powershell script tasks
-      inputs:
-        command: push
-        repository: $(imageName)
-        containerRegistry: $(dockerRegistryServiceConnection)
-        tags: |
-          latest
