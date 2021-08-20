@@ -42,8 +42,10 @@ class ConfigTestCase(ConfigTestCaseBase):
             }
         }
         validated_dict = normalize_validate_config({"localhost": dict()})
+        # print(f"validated dict: {validated_dict}")
         self.assertEqual(len(validated_dict), 1)
         deep_diff = DeepDiff(validated_dict, default_dict, ignore_order=True)
+        # print(f"deep_diff: {deep_diff}")
         self.assertEmpty(deep_diff)
 
     def test_invalid_concurrency(self):

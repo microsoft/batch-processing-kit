@@ -11,7 +11,6 @@ docker_port_1="5000"
 docker_port_2="5001"
 container_port="5000"
 temp_vol="test_vol"
-container_registry='joshcacr.azurecr.io'
 
 # pull speech-to-text Docker image
 docker pull $sttImageName
@@ -27,9 +26,9 @@ while [[ $finished != 1 ]]; do
     if [ $response = "200" ]; then
         let finished=1
         ip1=$(docker inspect $stt_on_prem_1 --format '{{ .NetworkSettings.IPAddress }}')
-        echo "INFO: Fetched IP address of first speech-to-text container"
+        echo INFO: Fetched IP address of first speech-to-text container
     else
-        echo "INFO: Waiting for first speech-to-text container to start"
+        echo INFO: Waiting for first speech-to-text container to start
     fi
     sleep 1
 done
@@ -40,9 +39,9 @@ while [[ $finished != 1 ]]; do
     if [ $response = "200" ]; then
         let finished=1
         ip2=$(docker inspect $stt_on_prem_2 --format '{{ .NetworkSettings.IPAddress }}')
-        echo "INFO: Fetched IP address of second speech-to-text container"
+        echo INFO: Fetched IP address of second speech-to-text container
     else
-        echo "INFO: Waiting for second speech-to-text container to start"
+        echo INFO: Waiting for second speech-to-text container to start
     fi
     sleep 1
 done
@@ -62,10 +61,9 @@ MyContainer2:
 popd
 
 # run batch processing container. container deleted after running
-echo "INFO: Sleeping for 15 seconds while waiting for speech-to-text containers to be ready"
+echo INFO: Sleeping for 15 seconds while waiting for speech-to-text containers to be ready
 sleep 15
-docker run --rm --name batch_processing --volume "$(pwd)"/$temp_vol:/my_nfs --net=host $containerRegistry/batchkit/speech-batch-kit:test -config /my_nfs/test_config.yaml -input_folder /my_nfs/test_audio_files -output_folder /my_nfs/transcriptions -log_folder /my_nfs/logs -file_log_level DEBUG -nbest 1 -m ONESHOT -diarization None -language en-US -strict_config -console_log_level DEBUG
-# docker run --rm --name batch_processing --volume "$(pwd)"/$temp_vol:/my_nfs --net=host joshcacr.azurecr.io/batchkit/speech-batch-kit:test -config /my_nfs/test_config.yaml -input_folder /my_nfs/test_audio_files -output_folder /my_nfs/transcriptions -log_folder /my_nfs/logs -file_log_level DEBUG -nbest 1 -m ONESHOT -diarization None -language en-US -strict_config -console_log_level DEBUG
+docker run --rm --name batch_processing --volume "$(pwd)"/$temp_vol:/my_nfs --net=host $containerRegistryName/batchkit/speech-batch-kit:test -config /my_nfs/test_config.yaml -input_folder /my_nfs/test_audio_files -output_folder /my_nfs/transcriptions -log_folder /my_nfs/logs -file_log_level DEBUG -nbest 1 -m ONESHOT -diarization None -language en-US -strict_config -console_log_level DEBUG
 
 pushd $temp_vol/transcriptions
 
@@ -75,7 +73,7 @@ num_endpoints=$(sudo jq .overall_summary.audio_stats.num_endpoints run_summary.j
 audio_files_passed=$(sudo jq .overall_summary.file_stats.passed run_summary.json)
 audio_files_total=$(sudo jq .overall_summary.file_stats.total run_summary.json)
 if [ $? != 0 ]; then
-    echo "ERROR: Container did not start properly or speech-batch-kit image directory structure modified"
+    echo ERROR: Container did not start properly or speech-batch-kit image directory structure modified
     exit 1
 fi
 
@@ -84,20 +82,19 @@ fi
     # all processed audio files passed successfully 
 if [ $num_endpoints = "2" ] && [ $audio_files_passed = $audio_files_total ]
 then 
-    echo "INFO: Speech Batch Kit sanity test passed"
+    echo INFO: Speech Batch Kit sanity test passed
 elif [ $num_endpoints = "2" ] && [ $audio_files_passed != $audio_files_total ] 
 then
-    echo "ERROR: Speech Batch Kit sanity test failed. $audio_files_passed out of $audio_files_total audio files were successfully processed"
+    echo ERROR: Speech Batch Kit sanity test failed. $audio_files_passed out of $audio_files_total audio files were successfully processed
 elif [ $num_endpoints != "2" ] && [ $audio_files_passed = $audio_files_total ]
 then 
-    echo "ERROR: Speech Batch Kit sanity test failed. $num_endpoints (not 2) endpoint was used to process audio files"
+    echo ERROR: Speech Batch Kit sanity test failed. $num_endpoints (not 2) endpoint was used to process audio files
 fi
 popd
 
 # sanity test complete
 # clean up environment by stopping and removing on-premise speech-to-text Docker containers 
-sudo rm -rf $temp_vol/logs 
-sudo rm -rf $temp_vol/transcriptions 
+sudo rm -rf $temp_vol/logs $temp_vol/transcriptions 
 docker stop $stt_on_prem_1
 docker stop $stt_on_prem_2
-echo "INFO: Deleted bind mount directory and stopped on-premise speech-to-text Docker containers"
+echo INFO: Deleted bind mount directory and stopped on-premise speech-to-text Docker containers

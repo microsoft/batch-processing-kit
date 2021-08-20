@@ -25,13 +25,9 @@ resources:
 - repo: self
 
 variables:
-  containerRegistry: 'joshcacr.azurecr.io'
-  setupBatchkit: 'setup_batchkit.py'
-  setupExamples: 'setup_examples.py'
-  setupExamples2: "setup_examples"
   vmImageName: 'ubuntu-20.04'
   imageName: 'batchkit/speech-batch-kit'
-  # imageName: 'joshcacr.azurecr.io/speech-batch-kit'
+  containerRegistry: 'joshcacr.azurecr.io'
 
 stages:
 - stage: BuildTestRelease 
@@ -48,9 +44,9 @@ stages:
       displayName: Setup Python virtual environment and install required packages Python package
       inputs:
         script: |
-          sudo apt-get install dos2unix
-          sudo apt-get install -y python3-venv
-          sudo apt install python-is-python3
+          sudo apt-get update -y
+          sudo apt-get upgrade -y
+          sudo apt-get install -y python3-venv dos2unix python-is-python3
           python -m venv my_venv
           source my_venv/bin/activate
           python -m pip install --upgrade pip
@@ -59,50 +55,48 @@ stages:
     - task: CmdLine@2
       displayName: Build Python package
       env: 
-        setupBatchkit: $(setupBatchkit)
-        setupExamples: $(setupExamples)
-        setupExamples2: $(setupExamples2)
+        setupBatchkit: 'setup_batchkit.py'
+        setupExamples: 'setup_examples.py'
+        pypiBatchkit: 'batchkit'
+        pypiExamples: 'batchkit_examples_speechsdk'
       inputs:
         script: |
           source my_venv/bin/activate
-          chmod 755 ci/parse_package_versions $setupBatchkit $setupExamples $setupExamples2
+          chmod 755 ci/parse_package_versions $setupBatchkit $setupExamples
           dos2unix ci/parse_package_versions ci/build_packages
-          echo "Verifying Python package versions updated"
+          echo Verifying Python package versions updated
           ./ci/parse_package_versions
-          echo "Building Python packages"
+          echo Building Python packages
           . ci/build_packages
-          echo $BATCHKIT_EXAMPLES_PKG
-    - task: CmdLine@2
-      displayName: Build Python package AGAIN
-      condition: always()
-      inputs:
-        script: |
-          source my_venv/bin/activate
-          chmod 755 ci/parse_package_versions $(setupBatchkit) $(setupExamples) $(setupBatchkit2)
-          dos2unix ci/parse_package_versions ci/build_packages
-          echo "Verifying Python package versions updated"
-          ./ci/parse_package_versions
-          echo "Building Python packages"
-          python $(setupBatchkit) sdist bdist_wheel
-          python $(setupExamples) sdist bdist_wheel
-          echo $BATCHKIT_EXAMPLES_PKG
-          ls -a
-          ls dist -a
+    # - task: CmdLine@2
+    #   displayName: Build Python package AGAIN
+    #   condition: always()
+    #   inputs:
+    #     script: |
+    #       source my_venv/bin/activate
+    #       chmod 755 ci/parse_package_versions $(setupBatchkit) $(setupExamples) $(setupBatchkit2)
+    #       dos2unix ci/parse_package_versions ci/build_packages
+    #       echo "Verifying Python package versions updated"
+    #       ./ci/parse_package_versions
+    #       echo "Building Python packages"
+    #       python $(setupBatchkit) sdist bdist_wheel
+    #       python $(setupExamples) sdist bdist_wheel
+    #       echo $BATCHKIT_EXAMPLES_PKG
+    #       ls -a
+    #       ls dist -a
     - task: CmdLine@2
       displayName: Execute batchkit Python package unit and stress tests
       condition: always()
       inputs:
         script: |
           source my_venv/bin/activate
-          echo $BATCHKIT_EXAMPLES_PKG
+          sudo apt-get install -y --no-install-recommends python3 python3-pip python3-dev libglib2.0 libgirepository1.0 libasound2 sox libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly python3-gst-1.0         
           chmod 755 run-stress-tests.py run-tests
           dos2unix run-tests
-          echo "Executing unit tests"
+          echo Executing unit tests
           ./run-tests
-          echo "Executing stress tests"
+          echo Executing stress tests
           python run-stress-tests.py
-          ls -a
-          ls dist -a
     - task: Docker@2
       displayName: Build Docker image
       condition: always()
@@ -116,22 +110,22 @@ stages:
           test
           latest
         # arguments: --build-arg BATCHKIT_EXAMPLES_PKG='batchkit_examples_speechsdk'
-    - task: CmdLine@2
-      displayName: Print current contents
-      condition: always()
-      inputs:
-        script: |
-          source my_venv/bin/activate
-          ls -a
-          docker images
-          docker ps -a
+    # - task: CmdLine@2
+    #   displayName: Print current contents
+    #   condition: always()
+    #   inputs:
+    #     script: |
+    #       source my_venv/bin/activate
+    #       ls -a
+    #       docker images
+    #       docker ps -a
 
 # need to add container registry to tag path: containerRegistry: 'joshcacr.azurecr.io'
     - task: CmdLine@2
       displayName: Execute Speech Batch Kit sanity test
       condition: always()
       env: 
-        containerRegistry: $(containerRegistry)
+        containerRegistryName: $(containerRegistry)
       inputs:
         script: |
           source my_venv/bin/activate
@@ -149,12 +143,13 @@ stages:
       # use env to map secret variables to an env variable with bash and Powershell scripts
       env: 
         PYPI_API_TOKEN: $(PYPI_API_TOKEN)
+        TEST_PYPI_API_TOKEN: 'pypi-AgEIcHlwaS5vcmcCJDBhMzU5ZTFjLWM5NTMtNDM3ZS04NjBmLTBkZTEyODBjZDFlMwACJXsicGVybWlzc2lvbnMiOiAidXNlciIsICJ2ZXJzaW9uIjogMX0AAAYgsDp35y24yL8mP-ulwKWZQ34_UxygRBXdGcTNtqHBUGY'
       inputs:
         script: |
           source my_venv/bin/activate
           python -m pip install --upgrade pip
           twine check dist/*
-          twine upload dist/* -u __token__ -p $PYPI_API_TOKEN
+          twine upload dist/* -u __token__ -p $TEST_PYPI_API_TOKEN
     - task: Docker@2
       displayName: Push Docker image
       # condition: eq(variables['Build.Reason'], 'PullRequest')
@@ -165,4 +160,4 @@ stages:
         repository: $(imageName)
         containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
-          test
+          latest

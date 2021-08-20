@@ -3,15 +3,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-echo "environment variable: $setupBatchkit" 
-
-echo "FIRST"
 python $setupBatchkit sdist bdist_wheel
 python $setupExamples sdist bdist_wheel
-
-echo "SECOND"
-python $setupBatchkit2 sdist bdist_wheel
-
-echo "THIRD"
-python "$setupBatchkit" sdist bdist_wheel
-python "$setupExamples" sdist bdist_wheel
