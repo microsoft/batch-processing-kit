@@ -47,7 +47,7 @@ while [[ $finished != 1 ]]; do
     sleep 1
 done
 
-update config.yaml with speech container IP addresses 
+# update config.yaml with speech container IP addresses 
 pushd $temp_vol
 
 sudo rm test_config.yaml
@@ -64,7 +64,8 @@ popd
 # run batch processing container. container deleted after running
 echo "INFO: Sleeping for 15 seconds while waiting for speech-to-text containers to be ready"
 sleep 15
-docker run --rm --name batch_processing --volume "$(pwd)"/$temp_vol:/my_nfs --net=host joshcacr.azurecr.io/batchkit/speech-batch-kit:test -config /my_nfs/test_config.yaml -input_folder /my_nfs/test_audio_files -output_folder /my_nfs/transcriptions -log_folder /my_nfs/logs -file_log_level DEBUG -nbest 1 -m ONESHOT -diarization None -language en-US -strict_config -console_log_level DEBUG
+docker run --rm --name batch_processing --volume "$(pwd)"/$temp_vol:/my_nfs --net=host $containerRegistry/batchkit/speech-batch-kit:test -config /my_nfs/test_config.yaml -input_folder /my_nfs/test_audio_files -output_folder /my_nfs/transcriptions -log_folder /my_nfs/logs -file_log_level DEBUG -nbest 1 -m ONESHOT -diarization None -language en-US -strict_config -console_log_level DEBUG
+# docker run --rm --name batch_processing --volume "$(pwd)"/$temp_vol:/my_nfs --net=host joshcacr.azurecr.io/batchkit/speech-batch-kit:test -config /my_nfs/test_config.yaml -input_folder /my_nfs/test_audio_files -output_folder /my_nfs/transcriptions -log_folder /my_nfs/logs -file_log_level DEBUG -nbest 1 -m ONESHOT -diarization None -language en-US -strict_config -console_log_level DEBUG
 
 pushd $temp_vol/transcriptions
 

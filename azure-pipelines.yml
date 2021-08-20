@@ -57,20 +57,21 @@ stages:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install twine wheel yolk3k
-    # - task: CmdLine@2
-    #   displayName: Build Python package
-    #   inputs:
-    #     script: |
-    #       source my_venv/bin/activate
-    #       chmod 755 ci/parse_package_versions $(setupBatchkit) $(setupExamples) $(setupBatchkit2)
-    #       dos2unix ci/parse_package_versions ci/build_packages
-    #       echo "Verifying Python package versions updated"
-    #       ./ci/parse_package_versions
-    #       echo "Building Python packages"
-    #       . ci/build_packages
-    #       echo $BATCHKIT_EXAMPLES_PKG
+    - task: CmdLine@2
+      displayName: Build Python package
+      inputs:
+        script: |
+          source my_venv/bin/activate
+          chmod 755 ci/parse_package_versions $(setupBatchkit) $(setupExamples) $(setupBatchkit2)
+          dos2unix ci/parse_package_versions ci/build_packages
+          echo "Verifying Python package versions updated"
+          ./ci/parse_package_versions
+          echo "Building Python packages"
+          . ci/build_packages
+          echo $BATCHKIT_EXAMPLES_PKG
     - task: CmdLine@2
       displayName: Build Python package AGAIN
+      condition: always()
       inputs:
         script: |
           source my_venv/bin/activate
@@ -84,21 +85,21 @@ stages:
           echo $BATCHKIT_EXAMPLES_PKG
           ls -a
           ls dist -a
-    # - task: CmdLine@2
-    #   displayName: Execute batchkit Python package unit and stress tests
-    #   condition: always()
-    #   inputs:
-    #     script: |
-    #       source my_venv/bin/activate
-    #       echo $BATCHKIT_EXAMPLES_PKG
-    #       chmod 755 run-stress-tests.py run-tests
-    #       dos2unix run-tests
-    #       echo "Executing unit tests"
-    #       ./run-tests
-    #       echo "Executing stress tests"
-    #       python run-stress-tests.py
-    #       ls -a
-    #       ls dist -a
+    - task: CmdLine@2
+      displayName: Execute batchkit Python package unit and stress tests
+      condition: always()
+      inputs:
+        script: |
+          source my_venv/bin/activate
+          echo $BATCHKIT_EXAMPLES_PKG
+          chmod 755 run-stress-tests.py run-tests
+          dos2unix run-tests
+          echo "Executing unit tests"
+          ./run-tests
+          echo "Executing stress tests"
+          python run-stress-tests.py
+          ls -a
+          ls dist -a
     - task: Docker@2
       displayName: Build Docker image
       condition: always()
@@ -125,6 +126,9 @@ stages:
 # need to add container registry to tag path: containerRegistry: 'joshcacr.azurecr.io'
     - task: CmdLine@2
       displayName: Execute Speech Batch Kit sanity test
+      condition: always()
+      env: 
+        containerRegistry: $(containerRegistry)
       inputs:
         script: |
           source my_venv/bin/activate
@@ -135,22 +139,23 @@ stages:
           popd
 
 # RELEASE PIPELINE TASKS
-    # - task: CmdLine@2
-    #   displayName: Publish Python packages
-    #   condition: eq(variables['Build.Reason'], 'PullRequest')
-
-    #   # use env to map secret variables to an env variable with bash and Powershell scripts
-    #   env: 
-    #     PYPI_API_TOKEN: $(PYPI_API_TOKEN)
-    #   inputs:
-    #     script: |
-    #       source my_venv/bin/activate
-    #       python -m pip install --upgrade pip
-    #       twine check dist/*
-    #       twine upload dist/* -u __token__ -p $PYPI_API_TOKEN
+    - task: CmdLine@2
+      displayName: Publish Python packages
+      # condition: eq(variables['Build.Reason'], 'PullRequest')
+      condition: always()
+      # use env to map secret variables to an env variable with bash and Powershell scripts
+      env: 
+        PYPI_API_TOKEN: $(PYPI_API_TOKEN)
+      inputs:
+        script: |
+          source my_venv/bin/activate
+          python -m pip install --upgrade pip
+          twine check dist/*
+          twine upload dist/* -u __token__ -p $PYPI_API_TOKEN
     - task: Docker@2
       displayName: Push Docker image
       # condition: eq(variables['Build.Reason'], 'PullRequest')
+      condition: always()
       # secret variables must be called with $() notation outside of bash and Powershell script tasks
       inputs:
         command: push
