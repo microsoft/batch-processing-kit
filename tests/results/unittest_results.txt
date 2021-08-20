@@ -1,0 +1,40 @@
+test_batch_request_finds_subtypes (tests.test_batch_request_dependency_injection.DependencyInjectionTestCase) ... batch_request.py: find_subtypes():  skipping: cerberus.tests
+ok
+test_batch_request_from_config (tests.test_batch_request_dependency_injection.DependencyInjectionTestCase) ... batch_request.py: find_subtypes():  skipping: cerberus.tests
+ok
+test_batch_request_from_json (tests.test_batch_request_dependency_injection.DependencyInjectionTestCase) ... batch_request.py: find_subtypes():  skipping: cerberus.tests
+ok
+test_default_values (tests.test_cmdline.TestBatchCommandLine) ... ok
+test_invalid_choice (tests.test_cmdline.TestBatchCommandLine) ... ok
+test_invalid_combinations (tests.test_cmdline.TestBatchCommandLine) ... ok
+test_invalid_values (tests.test_cmdline.TestBatchCommandLine) ... ok
+test_cloud_endpoint (tests.test_config.ConfigTestCase) ... ok
+test_default_values (tests.test_config.ConfigTestCase) ... FAIL
+test_empty_config (tests.test_config.ConfigTestCase) ... ok
+test_invalid_concurrency (tests.test_config.ConfigTestCase) ... ok
+test_invalid_language (tests.test_config.ConfigTestCase) ... ok
+test_invalid_port (tests.test_config.ConfigTestCase) ... ok
+test_invalid_rtf (tests.test_config.ConfigTestCase) ... ok
+test_NonDaemonicPool_with_tee_to_pipe (tests.test_pool_tee.TestPoolWithTee) ... ok
+
+======================================================================
+FAIL: test_default_values (tests.test_config.ConfigTestCase)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/mnt/c/src/batch-processing-kit/tests/test_config.py", line 49, in test_default_values
+    self.assertEmpty(deep_diff)
+  File "/mnt/c/src/batch-processing-kit/tests/test_config.py", line 18, in assertEmpty
+    self.assertEqual(len(my_dict), 0, self.dump_dict(my_dict))
+AssertionError: 1 != 0 : {
+  "values_changed": {
+    "root['localhost']['host']": {
+      "new_value": "localhost",
+      "old_value": "host.docker.internal"
+    }
+  }
+}
+
+----------------------------------------------------------------------
+Ran 15 tests in 0.843s
+
+FAILED (failures=1)
