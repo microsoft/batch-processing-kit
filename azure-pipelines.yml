@@ -10,6 +10,7 @@ trigger:
     - README.md
     - SECURITY.md
 pr:
+  # may delete branches section
   branches:
     include:
     - master
@@ -27,7 +28,8 @@ resources:
 variables:
   vmImageName: 'ubuntu-20.04'
   imageName: 'batchkit/speech-batch-kit'
-  containerRegistry: 'joshcacr.azurecr.io'
+  pypiExamples: 'batchkit_examples_speechsdk'
+  containerRegistryName: 'joshcacr.azurecr.io' # need to update to final docker hub location
 
 stages:
 - stage: BuildTestRelease 
@@ -58,7 +60,7 @@ stages:
         setupBatchkit: 'setup_batchkit.py'
         setupExamples: 'setup_examples.py'
         pypiBatchkit: 'batchkit'
-        pypiExamples: 'batchkit_examples_speechsdk'
+        pypiExamples: $(pypiExamples)
       inputs:
         script: |
           source my_venv/bin/activate
@@ -68,22 +70,6 @@ stages:
           ./ci/parse_package_versions
           echo Building Python packages
           . ci/build_packages
-    # - task: CmdLine@2
-    #   displayName: Build Python package AGAIN
-    #   condition: always()
-    #   inputs:
-    #     script: |
-    #       source my_venv/bin/activate
-    #       chmod 755 ci/parse_package_versions $(setupBatchkit) $(setupExamples) $(setupBatchkit2)
-    #       dos2unix ci/parse_package_versions ci/build_packages
-    #       echo "Verifying Python package versions updated"
-    #       ./ci/parse_package_versions
-    #       echo "Building Python packages"
-    #       python $(setupBatchkit) sdist bdist_wheel
-    #       python $(setupExamples) sdist bdist_wheel
-    #       echo $BATCHKIT_EXAMPLES_PKG
-    #       ls -a
-    #       ls dist -a
     - task: CmdLine@2
       displayName: Execute batchkit Python package unit and stress tests
       condition: always()
@@ -97,7 +83,19 @@ stages:
           echo Executing unit tests
           ./run-tests
           echo Executing stress tests
+          ulimit -n 1000000 1000000
           python run-stress-tests.py
+
+      # ulimit -n sets limit of file descriptors
+      # andrew to send instructions for bumping ulimit in wsl2 as non-sudo
+      # man ulimit
+      # figure out how to activate virtual env within sudo bash 
+      # sudo bash -c "ulimit -n 1000000 1000000; source /home/azure_user/find_agent_working_dir/../my_venv/bin/activate; python run-stress-tests.py" 
+      # sudo bash -c "python" --> sys.path
+      
+      # 1. andrew's solution of modifying ulimit within wsl2 joshclemons user works! and applies the same way in agent 
+      # 2. alternatively, use sudo bash for setting ulimit and executing stress tests
+
     - task: Docker@2
       displayName: Build Docker image
       condition: always()
@@ -110,23 +108,13 @@ stages:
         tags: |
           test
           latest
-        # arguments: --build-arg BATCHKIT_EXAMPLES_PKG='batchkit_examples_speechsdk'
-    # - task: CmdLine@2
-    #   displayName: Print current contents
-    #   condition: always()
-    #   inputs:
-    #     script: |
-    #       source my_venv/bin/activate
-    #       ls -a
-    #       docker images
-    #       docker ps -a
+        arguments: --build-arg BATCHKIT_EXAMPLES_PKG=$(pypiExamples)
 
-# need to add container registry to tag path: containerRegistry: 'joshcacr.azurecr.io'
     - task: CmdLine@2
       displayName: Execute Speech Batch Kit sanity test
       condition: always()
       env: 
-        containerRegistryName: $(containerRegistry)
+        containerRegistryName: $(containerRegistryName)
       inputs:
         script: |
           source my_venv/bin/activate
@@ -137,6 +125,8 @@ stages:
           popd
 
 # RELEASE PIPELINE TASKS
+    # FIGURE OUT HOW TO PUSH TO TEST PYPI
+    # twine upload --repo_name (or something) to specify test pypi
     - task: CmdLine@2
       displayName: Publish Python packages
       # condition: eq(variables['Build.Reason'], 'PullRequest')
@@ -151,6 +141,10 @@ stages:
           python -m pip install --upgrade pip
           twine check dist/*
           twine upload dist/* -u __token__ -p $TEST_PYPI_API_TOKEN
+
+    # OKAY TO PUBLISH TO DOCKER IMAGE TO DOCKER HUB USING SOME TEST TAG (e.g. image:my_test)
+    # BUILD docker image with version tag matching github repo and push both "latest" and "version" images to dockerhub
+    # VERSION variable will be output of some cmdline task ??
     - task: Docker@2
       displayName: Push Docker image
       # condition: eq(variables['Build.Reason'], 'PullRequest')
