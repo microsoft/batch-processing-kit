@@ -82,19 +82,19 @@ stages:
           dos2unix run-tests
           echo Executing unit tests
           ./run-tests
-          echo Executing stress tests
-          ulimit -n 1000000 1000000
-          python run-stress-tests.py
+          echo Executing stress run-tests
+          ls -a  
+          pwd 
+          sudo bash -c "ulimit -n 1000000 1000000; source my_venv/bin/activate; python run-stress-tests.py" 
+      # python run-stress-tests.py
 
       # ulimit -n sets limit of file descriptors
-      # andrew to send instructions for bumping ulimit in wsl2 as non-sudo
-      # man ulimit
-      # figure out how to activate virtual env within sudo bash 
-      # sudo bash -c "ulimit -n 1000000 1000000; source /home/azure_user/find_agent_working_dir/../my_venv/bin/activate; python run-stress-tests.py" 
-      # sudo bash -c "python" --> sys.path
-      
-      # 1. andrew's solution of modifying ulimit within wsl2 joshclemons user works! and applies the same way in agent 
-      # 2. alternatively, use sudo bash for setting ulimit and executing stress tests
+      # GET PYTHON PATHS - PYTHONPATH=$()
+      # python -c 'import sys; print(sys.path)'
+      # workon test2; python -c 'import sys; print(sys.path)'; deactivate
+      # sudo bash -c "python -c 'import sys; print(sys.path)'"
+      # foo=$(pwd)
+      # foo="${foo}/awesome_venv/bin/activate"
 
     - task: Docker@2
       displayName: Build Docker image
@@ -125,8 +125,6 @@ stages:
           popd
 
 # RELEASE PIPELINE TASKS
-    # FIGURE OUT HOW TO PUSH TO TEST PYPI
-    # twine upload --repo_name (or something) to specify test pypi
     - task: CmdLine@2
       displayName: Publish Python packages
       # condition: eq(variables['Build.Reason'], 'PullRequest')
@@ -134,13 +132,13 @@ stages:
       # use env to map secret variables to an env variable with bash and Powershell scripts
       env: 
         PYPI_API_TOKEN: $(PYPI_API_TOKEN)
-        TEST_PYPI_API_TOKEN: 'token123'
+        TEST_PYPI_API_TOKEN: $(TEST_PYPI_API_TOKEN)
       inputs:
         script: |
           source my_venv/bin/activate
           python -m pip install --upgrade pip
           twine check dist/*
-          twine upload dist/* -u __token__ -p $TEST_PYPI_API_TOKEN
+          twine upload --repository testpypi dist/* -u __token__ -p $TEST_PYPI_API_TOKEN
 
     # OKAY TO PUBLISH TO DOCKER IMAGE TO DOCKER HUB USING SOME TEST TAG (e.g. image:my_test)
     # BUILD docker image with version tag matching github repo and push both "latest" and "version" images to dockerhub
