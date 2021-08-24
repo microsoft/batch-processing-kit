@@ -100,13 +100,19 @@ stages:
       # source awesome_venv/bin/activate
     # set variable docker_version IS recognized in this step
     - task: Docker@2
+      displayName: Login to Docker
+      inputs:
+        containerRegistry: $(containerRegistry)
+        command: 'login'
+
+    - task: Docker@2
       displayName: Build Docker image
       condition: always()
       inputs:
         command: build
         repository: $(imageName)
         Dockerfile: batchkit_examples/speech_sdk/Dockerfile
-        containerRegistry: $(dockerRegistryServiceConnection)
+        containerRegistry: $(containerRegistry)
         buildContext: $(Build.Repository.LocalPath)
         tags: |
           test
@@ -133,7 +139,6 @@ stages:
       displayName: Publish Python packages
       # condition: eq(variables['Build.Reason'], 'PullRequest')
       condition: always()
-      # use env to map secret variables to an env variable with bash and Powershell scripts
       env: 
         PYPI_API_TOKEN: $(PYPI_API_TOKEN)
         TEST_PYPI_API_TOKEN: $(TEST_PYPI_API_TOKEN)
@@ -147,10 +152,12 @@ stages:
       displayName: Push Docker image
       # condition: eq(variables['Build.Reason'], 'PullRequest')
       condition: always()
-      # secret variables must be called with $() notation outside of bash and Powershell script tasks
       inputs:
         command: push
         repository: $(imageName)
-        containerRegistry: $(dockerRegistryServiceConnection)
+        containerRegistry: $(containerRegistry)
         tags: |
-          latest
+          $(docker_version)
+
+# use env to map secret variables to an env variable with bash and Powershell scripts
+# secret variables must be called with $() notation outside of bash and Powershell script tasks
