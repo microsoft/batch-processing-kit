@@ -59,16 +59,15 @@ stages:
         pypiBatchkit: 'batchkit'
         parseVersions: $(parseVersions)
         docker_version: $(docker_version)
+      # set variable docker_version is not recognized in this step
       inputs:
         script: |
-          echo INITIAL docker version is $docker_version
           source my_venv/bin/activate
           chmod 755 ci/parse_package_versions $setupBatchkit
           dos2unix ci/parse_package_versions ci/build_packages
           echo Verifying Python package versions updated
           ./ci/parse_package_versions
           echo "##vso[task.setvariable variable=docker_version]"$(cat version.txt)""
-          echo FINAL docker version is $docker_version
           echo Building Python packages
           . ci/build_packages
     # - task: CmdLine@2
@@ -99,13 +98,7 @@ stages:
       # foo=$(pwd)
       # foo="${foo}/awesome_venv/bin/activate"
       # source awesome_venv/bin/activate
-    - task: CmdLine@2
-      displayName: TEST
-      env: 
-        docker_version: $(docker_version)
-      inputs:
-        script: |
-          echo docker version is $docker_version
+    # set variable docker_version IS recognized in this step
     - task: Docker@2
       displayName: Build Docker image
       condition: always()
@@ -118,6 +111,7 @@ stages:
         tags: |
           test
           latest
+          $(docker_version)
         arguments: --build-arg BATCHKIT_EXAMPLES_PKG=$(pypiExamples)
 
     - task: CmdLine@2
