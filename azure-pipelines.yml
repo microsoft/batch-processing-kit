@@ -58,31 +58,35 @@ stages:
         setupExamples: 'setup_examples.py'
         pypiBatchkit: 'batchkit'
         parseVersions: $(parseVersions)
+        docker_version: $(docker_version)
       inputs:
         script: |
+          echo INITIAL docker version is $docker_version
           source my_venv/bin/activate
           chmod 755 ci/parse_package_versions $setupBatchkit
           dos2unix ci/parse_package_versions ci/build_packages
           echo Verifying Python package versions updated
           ./ci/parse_package_versions
+          echo "##vso[task.setvariable variable=docker_version]"$(cat version.txt)""
+          echo FINAL docker version is $docker_version
           echo Building Python packages
           . ci/build_packages
-    - task: CmdLine@2
-      displayName: Execute batchkit Python package unit and stress tests
-      condition: always()
-      inputs:
-        script: |
-          source my_venv/bin/activate
-          sudo apt-get install -y --no-install-recommends python3 python3-pip python3-dev libglib2.0 libgirepository1.0 libasound2 sox libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly python3-gst-1.0 gcc libcairo2-dev pkg-config gir1.2-gtk-3.0         
-          pip install pycairo PyGObject       
-          chmod 755 run-stress-tests.py run-tests
-          dos2unix run-tests
-          echo Executing unit tests
-          ./run-tests
-          echo Executing stress tests
-          ls -a  
-          pwd 
-          sudo bash -c "ulimit -n 1000000 1000000; source my_venv/bin/activate; python run-stress-tests.py" 
+    # - task: CmdLine@2
+    #   displayName: Execute batchkit Python package unit and stress tests
+    #   condition: always()
+    #   inputs:
+    #     script: |
+    #       source my_venv/bin/activate
+    #       sudo apt-get install -y --no-install-recommends python3 python3-pip python3-dev libglib2.0 libgirepository1.0 libasound2 sox libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly python3-gst-1.0 gcc libcairo2-dev pkg-config gir1.2-gtk-3.0         
+    #       pip install pycairo PyGObject       
+    #       chmod 755 run-stress-tests.py run-tests
+    #       dos2unix run-tests
+    #       echo Executing unit tests
+    #       ./run-tests
+    #       echo Executing stress tests
+    #       ls -a  
+    #       pwd 
+    #       sudo bash -c "ulimit -n 1000000 1000000; source my_venv/bin/activate; python run-stress-tests.py" 
 
       # sudo bash -c "ulimit -n 1000000 1000000; pip install -r requirements.txt; python run-stress-tests.py" 
       # python run-stress-tests.py
@@ -95,7 +99,13 @@ stages:
       # foo=$(pwd)
       # foo="${foo}/awesome_venv/bin/activate"
       # source awesome_venv/bin/activate
-
+    - task: CmdLine@2
+      displayName: TEST
+      env: 
+        docker_version: $(docker_version)
+      inputs:
+        script: |
+          echo docker version is $docker_version
     - task: Docker@2
       displayName: Build Docker image
       condition: always()

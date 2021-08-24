@@ -7,3 +7,4 @@ variables:
   imageName: 'batchkit/speech-batch-kit'
   pypiExamples: 'batchkit_examples_speechsdk'
   containerRegistryName: 'joshcacr.azurecr.io' # need to update to final docker hub location
+  docker_version: "NA"
