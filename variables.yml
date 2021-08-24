@@ -1,0 +1,9 @@
+variables:
+  ${{ if eq(variables['Build.Reason'], 'PullRequest') }}:
+    parseVersions: "pr"
+  ${{ if not(eq(variables['Build.Reason'], 'PullRequest')) }}:
+    parseVersions: "master"
+  vmImageName: 'ubuntu-20.04'
+  imageName: 'batchkit/speech-batch-kit'
+  pypiExamples: 'batchkit_examples_speechsdk'
+  containerRegistryName: 'joshcacr.azurecr.io' # need to update to final docker hub location

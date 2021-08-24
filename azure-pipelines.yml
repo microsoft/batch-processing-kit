@@ -26,10 +26,7 @@ resources:
 - repo: self
 
 variables:
-  vmImageName: 'ubuntu-20.04'
-  imageName: 'batchkit/speech-batch-kit'
-  pypiExamples: 'batchkit_examples_speechsdk'
-  containerRegistryName: 'joshcacr.azurecr.io' # need to update to final docker hub location
+  - template: variables.yml
 
 stages:
 - stage: BuildTestRelease 
@@ -61,8 +58,10 @@ stages:
         setupExamples: 'setup_examples.py'
         pypiBatchkit: 'batchkit'
         pypiExamples: $(pypiExamples)
+        parseVersions: $(parseVersions)
       inputs:
         script: |
+          echo $parseVersions
           source my_venv/bin/activate
           chmod 755 ci/parse_package_versions $setupBatchkit $setupExamples
           dos2unix ci/parse_package_versions ci/build_packages
