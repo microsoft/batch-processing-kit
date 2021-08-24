@@ -82,8 +82,8 @@ stages:
           dos2unix run-tests
           echo Executing unit tests
           ./run-tests
-          echo Executing stress tests
-          sudo bash -c "ulimit -n 1000000 1000000; source my_venv/bin/activate; python run-stress-tests.py" 
+          # echo Executing stress tests
+          # sudo bash -c "ulimit -n 1000000 1000000; source my_venv/bin/activate; python run-stress-tests.py" 
 
     # DOCKER
     - task: Docker@2
