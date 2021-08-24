@@ -143,10 +143,6 @@ stages:
           python -m pip install --upgrade pip
           twine check dist/*
           twine upload --repository testpypi dist/* -u __token__ -p $TEST_PYPI_API_TOKEN
-
-    # OKAY TO PUBLISH TO DOCKER IMAGE TO DOCKER HUB USING SOME TEST TAG (e.g. image:my_test)
-    # BUILD docker image with version tag matching github repo and push both "latest" and "version" images to dockerhub
-    # VERSION variable will be output of some cmdline task ??
     - task: Docker@2
       displayName: Push Docker image
       # condition: eq(variables['Build.Reason'], 'PullRequest')
