@@ -55,6 +55,7 @@ stages:
       displayName: Build Python package
       env: 
         setupBatchkit: 'setup_batchkit.py'
+        setupBatchkit: 'setup_examples.py'
         pypiBatchkit: 'batchkit'
         parseVersions: $(parseVersions)
       inputs:

@@ -15,10 +15,10 @@
 if [ "$parseVersions" = "pr" ]
 then 
     # pushing to pull request, so check version against current commit to master
-    HASH=$(git log --pretty=format:"%H" --first-parent master | head -n 1)
+    HASH=$(git log --pretty=format:"%H" --first-parent origin/master | head -n 1)
 else
     # pushing to master, so check version against previous commit to master
-    HASH=$(git log --pretty=format:"%H" --first-parent master | head -n 2 | tail -n 1)
+    HASH=$(git log --pretty=format:"%H" --first-parent origin/master | head -n 2 | tail -n 1)
 fi
 
 BATCHKIT_OLD=$(curl -s https://raw.githubusercontent.com/microsoft/batch-processing-kit/$HASH/setup_batchkit.py | grep version= | awk '{$1=$1};1' | cut -c1-8 --complement | tr -d ,\')
@@ -38,6 +38,6 @@ then
         echo ERROR: Increment Python package version for \'$pypiBatchkit\'. Package version is same as package version in master
     else 
         echo ERROR: Increment Python package version for \'$pypiBatchkit\'. Package version is same as package version in previous commit to master
-    exit 1
+    # exit 1
     fi
 fi
