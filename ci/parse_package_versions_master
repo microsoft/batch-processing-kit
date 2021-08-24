@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+# pushing to master, so check version against previous commit to master
+HASH=$(git log --pretty=format:"%H" --first-parent master | head -n 2 | tail -n 1)
+BATCHKIT_OLD=$(curl -s https://raw.githubusercontent.com/microsoft/batch-processing-kit/$HASH/setup_batchkit.py | grep version= | awk '{$1=$1};1' | cut -c1-8 --complement | tr -d ,\')
+BATCHKIT_NEW=$(python $setupBatchkit --version)
+echo INFO: Previous master \'$pypiBatchkit\' is version \'$BATCHKIT_OLD\'. Current master \'$pypiBatchkit\' is version \'$BATCHKIT_NEW\'
+
+if [ "$BATCHKIT_OLD" = "$BATCHKIT_NEW" ]
+then 
+    echo ERROR: Increment Python package version for \'$pypiBatchkit\'. Current package version is the same as package version in previous commit to master
+    exit 1
+fi

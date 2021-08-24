@@ -67,7 +67,8 @@ stages:
           chmod 755 ci/parse_package_versions $setupBatchkit $setupExamples
           dos2unix ci/parse_package_versions ci/build_packages
           echo Verifying Python package versions updated
-          ./ci/parse_package_versions
+          ./ci/parse_package_versions_pr
+          ./ci/parse_package_versions_master
           echo Building Python packages
           . ci/build_packages
     - task: CmdLine@2
@@ -82,10 +83,12 @@ stages:
           dos2unix run-tests
           echo Executing unit tests
           ./run-tests
-          echo Executing stress run-tests
+          echo Executing stress tests
           ls -a  
           pwd 
           sudo bash -c "ulimit -n 1000000 1000000; source my_venv/bin/activate; python run-stress-tests.py" 
+
+      # sudo bash -c "ulimit -n 1000000 1000000; pip install -r requirements.txt; python run-stress-tests.py" 
       # python run-stress-tests.py
 
       # ulimit -n sets limit of file descriptors
@@ -95,6 +98,7 @@ stages:
       # sudo bash -c "python -c 'import sys; print(sys.path)'"
       # foo=$(pwd)
       # foo="${foo}/awesome_venv/bin/activate"
+      # source awesome_venv/bin/activate
 
     - task: Docker@2
       displayName: Build Docker image
