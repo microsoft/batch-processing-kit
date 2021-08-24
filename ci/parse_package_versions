@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+# to only publish batchkit_examples and NOT batchkit pypi package (lower priority)
+    # from pipeline cmd, do git diff to determine which files were actually modified between head and head-1
+    # would still have GitHub repo versions match but would ONLY publish pypi package that was actually modified as determined by git diff
+
+# setupBatchkit='setup_batchkit.py'
+# pypiBatchkit='batchkit'
+# parseVersions="master"
+# parseVersions: "master"
+
+if [ "$parseVersions" = "pr" ]
+then 
+    # pushing to pull request, so check version against current commit to master
+    HASH=$(git log --pretty=format:"%H" --first-parent master | head -n 1)
+else
+    # pushing to master, so check version against previous commit to master
+    HASH=$(git log --pretty=format:"%H" --first-parent master | head -n 2 | tail -n 1)
+fi
+
+BATCHKIT_OLD=$(curl -s https://raw.githubusercontent.com/microsoft/batch-processing-kit/$HASH/setup_batchkit.py | grep version= | awk '{$1=$1};1' | cut -c1-8 --complement | tr -d ,\')
+BATCHKIT_NEW=$(python $setupBatchkit --version)
+
+if [ "$parseVersions" = "pr" ]
+then 
+    echo INFO: Master \'$pypiBatchkit\' is version \'$BATCHKIT_OLD\'. \'$pypiBatchkit\' pushed to pull request is version \'$BATCHKIT_NEW\'
+else 
+    echo INFO: Previous master \'$pypiBatchkit\' is version \'$BATCHKIT_OLD\'. \'$pypiBatchkit\' pushed to master is version \'$BATCHKIT_NEW\'
+fi 
+
+if [ "$BATCHKIT_OLD" = "$BATCHKIT_NEW" ]
+then 
+    if [ "$parseVersions" = "pr" ]
+    then 
+        echo ERROR: Increment Python package version for \'$pypiBatchkit\'. Package version is same as package version in master
+    else 
+        echo ERROR: Increment Python package version for \'$pypiBatchkit\'. Package version is same as package version in previous commit to master
+    exit 1
+    fi
+fi

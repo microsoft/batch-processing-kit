@@ -55,19 +55,15 @@ stages:
       displayName: Build Python package
       env: 
         setupBatchkit: 'setup_batchkit.py'
-        setupExamples: 'setup_examples.py'
         pypiBatchkit: 'batchkit'
-        pypiExamples: $(pypiExamples)
         parseVersions: $(parseVersions)
       inputs:
         script: |
-          echo $parseVersions
           source my_venv/bin/activate
-          chmod 755 ci/parse_package_versions $setupBatchkit $setupExamples
+          chmod 755 ci/parse_package_versions $setupBatchkit
           dos2unix ci/parse_package_versions ci/build_packages
           echo Verifying Python package versions updated
-          ./ci/parse_package_versions_pr
-          ./ci/parse_package_versions_master
+          ./ci/parse_package_versions
           echo Building Python packages
           . ci/build_packages
     - task: CmdLine@2
