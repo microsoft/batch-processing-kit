@@ -10,7 +10,6 @@ trigger:
     - README.md
     - SECURITY.md
 pr:
-  # may delete branches section
   branches:
     include:
     - master
@@ -38,7 +37,7 @@ stages:
       vmImage: $(vmImageName)
     steps:
 
-# BUILD AND TEST PIPELINE TASKS
+    # BUILD AND TEST PIPELINE TASKS
     - task: CmdLine@2
       displayName: Setup Python virtual environment and install required packages Python package
       inputs:
@@ -51,15 +50,16 @@ stages:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install twine wheel yolk3k
+
+    # PYTHON
     - task: CmdLine@2
       displayName: Build Python package
       env: 
-        setupBatchkit: 'setup_batchkit.py'
-        setupExamples: 'setup_examples.py'
-        pypiBatchkit: 'batchkit'
+        setupBatchkit: $(setupBatchkit)
+        setupExamples: $(setupExamples)
+        pypiBatchkit: $(pypiBatchkit)
         parseVersions: $(parseVersions)
         docker_version: $(docker_version)
-      # set variable docker_version is not recognized in this step
       inputs:
         script: |
           source my_venv/bin/activate
@@ -70,41 +70,28 @@ stages:
           echo "##vso[task.setvariable variable=docker_version]"$(cat version.txt)""
           echo Building Python packages
           . ci/build_packages
-    # - task: CmdLine@2
-    #   displayName: Execute batchkit Python package unit and stress tests
-    #   condition: always()
-    #   inputs:
-    #     script: |
-    #       source my_venv/bin/activate
-    #       sudo apt-get install -y --no-install-recommends python3 python3-pip python3-dev libglib2.0 libgirepository1.0 libasound2 sox libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly python3-gst-1.0 gcc libcairo2-dev pkg-config gir1.2-gtk-3.0         
-    #       pip install pycairo PyGObject       
-    #       chmod 755 run-stress-tests.py run-tests
-    #       dos2unix run-tests
-    #       echo Executing unit tests
-    #       ./run-tests
-    #       echo Executing stress tests
-    #       ls -a  
-    #       pwd 
-    #       sudo bash -c "ulimit -n 1000000 1000000; source my_venv/bin/activate; python run-stress-tests.py" 
+    - task: CmdLine@2
+      displayName: Execute batchkit Python package unit and stress tests
+      condition: always()
+      inputs:
+        script: |
+          source my_venv/bin/activate
+          sudo apt-get install -y --no-install-recommends python3 python3-pip python3-dev libglib2.0 libgirepository1.0 libasound2 sox libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly python3-gst-1.0 gcc libcairo2-dev pkg-config gir1.2-gtk-3.0         
+          pip install pycairo PyGObject       
+          chmod 755 run-stress-tests.py run-tests
+          dos2unix run-tests
+          echo Executing unit tests
+          ./run-tests
+          echo Executing stress tests
+          sudo bash -c "ulimit -n 1000000 1000000; source my_venv/bin/activate; python run-stress-tests.py" 
 
-      # sudo bash -c "ulimit -n 1000000 1000000; pip install -r requirements.txt; python run-stress-tests.py" 
-      # python run-stress-tests.py
-
-      # ulimit -n sets limit of file descriptors
-      # GET PYTHON PATHS - PYTHONPATH=$()
-      # python -c 'import sys; print(sys.path)'
-      # workon test2; python -c 'import sys; print(sys.path)'; deactivate
-      # sudo bash -c "python -c 'import sys; print(sys.path)'"
-      # foo=$(pwd)
-      # foo="${foo}/awesome_venv/bin/activate"
-      # source awesome_venv/bin/activate
-    # set variable docker_version IS recognized in this step
+    # DOCKER
     - task: Docker@2
       displayName: Login to Docker
+      condition: always()
       inputs:
         containerRegistry: $(containerRegistry)
         command: 'login'
-
     - task: Docker@2
       displayName: Build Docker image
       condition: always()
@@ -116,7 +103,6 @@ stages:
         buildContext: $(Build.Repository.LocalPath)
         tags: |
           test
-          latest
           $(docker_version)
         arguments: --build-arg BATCHKIT_EXAMPLES_PKG=$(pypiExamples)
 
@@ -134,10 +120,10 @@ stages:
           ./speech_batch_kit_sanity_test
           popd
 
-# RELEASE PIPELINE TASKS
+    # RELEASE PIPELINE TASKS
     - task: CmdLine@2
       displayName: Publish Python packages
-      # condition: eq(variables['Build.Reason'], 'PullRequest')
+      # condition: in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI')
       condition: always()
       env: 
         PYPI_API_TOKEN: $(PYPI_API_TOKEN)
@@ -150,14 +136,14 @@ stages:
           twine upload --repository testpypi dist/* -u __token__ -p $TEST_PYPI_API_TOKEN
     - task: Docker@2
       displayName: Push Docker image
-      # condition: eq(variables['Build.Reason'], 'PullRequest')
+      # condition: in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI')
       condition: always()
       inputs:
         command: push
         repository: $(imageName)
         containerRegistry: $(containerRegistry)
         tags: |
-          $(docker_version)
-
+          test
+        # $(docker_version)
 # use env to map secret variables to an env variable with bash and Powershell scripts
 # secret variables must be called with $() notation outside of bash and Powershell script tasks

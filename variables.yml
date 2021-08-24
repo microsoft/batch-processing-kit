@@ -3,9 +3,12 @@ variables:
     parseVersions: "pr"
   ${{ if not(eq(variables['Build.Reason'], 'PullRequest')) }}:
     parseVersions: "master"
-  vmImageName: 'ubuntu-20.04'
-  imageName: 'batchkit/speech-batch-kit'
-  pypiExamples: 'batchkit_examples_speechsdk'
-  containerRegistryName: 'docker.io' # was joshcacr.azurecr.io' # need to update to final docker hub location
-  containerRegistry: 'batchkit_docker_service_connection'
-  docker_version: ""
+  vmImageName: "ubuntu-20.04"
+  imageName: "batchkit/speech-batch-kit"
+  pypiExamples: "batchkit_examples_speechsdk"
+  containerRegistryName: "docker.io" # was joshcacr.azurecr.io' # need to update to final docker hub location
+  containerRegistry: "batchkit_docker_service_connection"
+  docker_version: "0.9.9"
+  setupBatchkit: "setup_batchkit.py"
+  setupExamples: "setup_examples.py"
+  pypiBatchkit: "batchkit"
