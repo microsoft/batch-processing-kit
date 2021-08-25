@@ -58,6 +58,8 @@ stages:
         pypiBatchkit: $(pypiBatchkit)
         parseVersions: $(parseVersions)
         dockerVersion: $(dockerVersion)
+        setupBatchkit: $(setupBatchkit)
+        setupExamples: $(setupExamples)
       inputs:
         script: |
           source my_venv/bin/activate
