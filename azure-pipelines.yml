@@ -1,7 +1,7 @@
 trigger:
-  branches:
-    include:
-    - master
+  # branches:
+  #   include:
+  #   - master
   paths:
     exclude:
     - CODE_OF_CONDUCT.md
@@ -10,9 +10,9 @@ trigger:
     - README.md
     - SECURITY.md
 pr:
-  branches:
-    include:
-    - master
+  # branches:
+  #   include:
+  #   - master
   paths:
     exclude:
     - CODE_OF_CONDUCT.md
