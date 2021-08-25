@@ -82,7 +82,14 @@ stages:
           dos2unix run-tests
           echo Executing unit tests
           ./run-tests
-          # echo Executing stress tests
+          echo Executing stress tests
+          echo $(systemctl)
+          ps -eo 'tty,pid,comm' | grep ^?
+          ls /etc/security 
+          ls /etc/systemd
+          printf "\n*                hard    nofile          1000000" | sudo tee -a /etc/security/limits.conf
+          printf "[MANAGER]\nDefaultLimitNOFILE=1000000" | sudo tee -a /etc/systemd/system.conf.d/nofile.conf
+          python run-stress-tests.py
           # sudo bash -c "ulimit -n 1000000 1000000; source my_venv/bin/activate; python run-stress-tests.py" 
 
     # DOCKER
