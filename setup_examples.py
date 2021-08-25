@@ -13,11 +13,15 @@ with open(os.path.join(rootdir, 'requirements.txt')) as reqs:
     required = reqs.read().splitlines()
 deps = [line for line in required if len(line) > 0 and line[0] != "#"]
 
+# Get package version
+filename = "version.txt"
+with open(filename, "r") as f:
+    version = f.read()   
 
 # Package specification that includes every example.
 setup(
     name='batchkit_examples_speechsdk',
-    version='0.9.9.dev0',
+    version=version,
     author='Microsoft Azure',
     author_email='andwald@microsoft.com',
     url='https://github.com/microsoft/batch-processing-kit',
