@@ -27,11 +27,15 @@ for line in required:
     elif len(line) > 0 and line[0] != "#" and toggle:
         deps.append(line)
 
+# Get package version
+filename = "version.txt"
+with open(filename, "r") as f:
+    version = f.read()  
 
 # Package specification for batchkit library.
 setup(
     name='batchkit',
-    version='0.9.9.dev0',
+    version=version,
     author='Microsoft Azure',
     author_email='andwald@microsoft.com',
     description="Generic batch processing framework for managing the orchestration, dispatch, fault tolerance, and "
