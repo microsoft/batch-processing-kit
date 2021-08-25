@@ -7,10 +7,9 @@
     # from pipeline cmd, do git diff to determine which files were actually modified between head and head-1
     # would still have GitHub repo versions match but would ONLY publish pypi package that was actually modified as determined by git diff
 
-# setupBatchkit='setup_batchkit.py'
 # pypiBatchkit='batchkit'
 # parseVersions="master"
-# parseVersions: "master"
+# parseVersions: "pr"
 
 if [ "$parseVersions" = "pr" ]
 then 
@@ -21,8 +20,8 @@ else
     HASH=$(git log --pretty=format:"%H" --first-parent origin/master | head -n 2 | tail -n 1)
 fi
 
-BATCHKIT_OLD=$(curl -s https://raw.githubusercontent.com/microsoft/batch-processing-kit/$HASH/setup_batchkit.py | grep version= | awk '{$1=$1};1' | cut -c1-8 --complement | tr -d ,\')
-BATCHKIT_NEW=$(python $setupBatchkit --version)
+BATCHKIT_OLD=$(curl -s https://raw.githubusercontent.com/microsoft/batch-processing-kit/$HASH/version.txt)
+BATCHKIT_NEW=$(cat version.txt)
 
 if [ "$parseVersions" = "pr" ]
 then 

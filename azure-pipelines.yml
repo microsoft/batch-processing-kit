@@ -55,19 +55,17 @@ stages:
     - task: CmdLine@2
       displayName: Build Python package
       env: 
-        setupBatchkit: $(setupBatchkit)
-        setupExamples: $(setupExamples)
         pypiBatchkit: $(pypiBatchkit)
         parseVersions: $(parseVersions)
-        docker_version: $(docker_version)
+        dockerVersion: $(dockerVersion)
       inputs:
         script: |
           source my_venv/bin/activate
-          chmod 755 ci/parse_package_versions $setupBatchkit
+          chmod 755 ci/parse_package_versions
           dos2unix ci/parse_package_versions ci/build_packages
           echo Verifying Python package versions updated
           ./ci/parse_package_versions
-          echo "##vso[task.setvariable variable=docker_version]"$(cat version.txt)""
+          echo "##vso[task.setvariable variable=dockerVersion]"$(cat version.txt)""
           echo Building Python packages
           . ci/build_packages
     - task: CmdLine@2
@@ -151,6 +149,6 @@ stages:
         containerRegistry: $(containerRegistry)
         tags: |
           test
-        # $(docker_version)
+        # $(dockerVersion)
 # use env to map secret variables to an env variable with bash and Powershell scripts
 # secret variables must be called with $() notation outside of bash and Powershell script tasks
