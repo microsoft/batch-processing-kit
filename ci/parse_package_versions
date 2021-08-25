@@ -38,6 +38,6 @@ then
         echo ERROR: Increment Python package version for \'$pypiBatchkit\'. Package version is same as package version in master
     else 
         echo ERROR: Increment Python package version for \'$pypiBatchkit\'. Package version is same as package version in previous commit to master
-    # exit 1
+    exit 1
     fi
 fi
