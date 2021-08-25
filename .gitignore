@@ -9,6 +9,7 @@ dist/
 batchkit/__pycache__/
 batchkit_examples/__pycache__/
 batchkit_examples/speech_sdk/__pycache__/
+ci/__pycache__/
 tests/__pycache__/
 venv/
 

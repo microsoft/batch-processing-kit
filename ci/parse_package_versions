@@ -7,9 +7,8 @@
     # from pipeline cmd, do git diff to determine which files were actually modified between head and head-1
     # would still have GitHub repo versions match but would ONLY publish pypi package that was actually modified as determined by git diff
 
-# pypiBatchkit='batchkit'
-# parseVersions="master"
-# parseVersions: "pr"
+pypiBatchkit='batchkit'
+parseVersions="pr"
 
 if [ "$parseVersions" = "pr" ]
 then 
@@ -22,6 +21,7 @@ fi
 
 BATCHKIT_OLD=$(curl -s https://raw.githubusercontent.com/microsoft/batch-processing-kit/$HASH/version.txt)
 BATCHKIT_NEW=$(cat version.txt)
+COMPARE=$(python -c "from ci import compare_versions; compare_versions.compare_versions('$BATCHKIT_NEW', '$BATCHKIT_OLD')")
 
 if [ "$parseVersions" = "pr" ]
 then 
@@ -30,7 +30,7 @@ else
     echo INFO: Previous master \'$pypiBatchkit\' is version \'$BATCHKIT_OLD\'. \'$pypiBatchkit\' pushed to master is version \'$BATCHKIT_NEW\'
 fi 
 
-if [ "$BATCHKIT_OLD" = "$BATCHKIT_NEW" ]
+if [ "$COMPARE" = "0" ]
 then 
     if [ "$parseVersions" = "pr" ]
     then 
@@ -39,4 +39,8 @@ then
         echo ERROR: Increment Python package version for \'$pypiBatchkit\'. Package version is same as package version in previous commit to master
     exit 1
     fi
+elif [ "$COMPARE" = "-1" ]
+then 
+    echo ERROR: Invalid version format
+    exit 1
 fi
