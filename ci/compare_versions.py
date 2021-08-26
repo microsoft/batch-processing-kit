@@ -12,6 +12,7 @@ def compare_versions(BATCHKIT_NEW, BATCHKIT_OLD):
             print("0")
     except:
         print("-1")
+# version = "0.9.9-dev.0"
 # version = "0.9.12-dev.2"
 # inc_major = "1.9.12-dev.2"
 # inc_minor = "0.10.12-dev.2"

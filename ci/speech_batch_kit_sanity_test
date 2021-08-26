@@ -31,7 +31,7 @@ while [[ $finished != 1 ]]; do
     else
         echo "INFO: Waiting for first speech-to-text container to start"
     fi
-    sleep 1
+    sleep 0.1
 done
 
 finished=0
@@ -44,26 +44,41 @@ while [[ $finished != 1 ]]; do
     else
         echo "INFO: Waiting for second speech-to-text container to start"
     fi
-    sleep 1
+    sleep 0.1
 done
+
+
+# rename sanity_test to integration_test
+# change .wav to 5-10 sec file
+# change concurrency to 5 on each endpoint
+# loop 200 times across single .wav file to make copies
+# make copies with symlink (ln -s). hardlink or softlink works. NOT scp / cpp
+# after this but before docker run, write while loop that polls for endpoint status as shown in "speech_sdk/endpoint_status.py"
+# goal is to mimic behavior of code below and check that 1) endpoint "status" returns 200 code, 2) ApiStatus and ApiStatusMessage include "valid". see below
+# this will replace 2x "/ready" checks above
+    # status_url = "http://{0}:{1}/status".format(host, port)
+    # result = requests.get(status_url)
+    # result = json.loads(result.text)
+    # if 'valid' in result['apiStatus'].lower() and 'valid' in result['apiStatusMessage'].lower():
+    #     return True
+
+
 
 # update config.yaml with speech container IP addresses 
 pushd $temp_vol
 
 sudo rm -f test_config.yaml
 echo "MyContainer1:
-  concurrency: 2
+  concurrency: 5
   host: $ip1
   port: $container_port
 MyContainer2:
-  concurrency: 2
+  concurrency: 5
   host: $ip2
   port: $container_port" >> test_config.yaml
 popd
 
 # run batch processing container. container deleted after running
-echo "INFO: Sleeping for 15 seconds while waiting for BOTH speech-to-text containers to be ready"
-sleep 15
 docker run --rm --name batch_processing --volume "$(pwd)"/$temp_vol:/my_nfs --net=host $containerRegistryName/batchkit/speech-batch-kit:test -config /my_nfs/test_config.yaml -input_folder /my_nfs/test_audio_files -output_folder /my_nfs/transcriptions -log_folder /my_nfs/logs -file_log_level DEBUG -nbest 1 -m ONESHOT -diarization None -language en-US -strict_config -console_log_level DEBUG
 
 pushd $temp_vol/transcriptions

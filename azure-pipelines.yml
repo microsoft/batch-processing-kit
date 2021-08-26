@@ -53,23 +53,31 @@ stages:
 
     # PYTHON
     - task: CmdLine@2
-      displayName: Build Python package
+      displayName: Verify version incremented
       env: 
         pypiBatchkit: $(pypiBatchkit)
-        parseVersions: $(parseVersions)
+        compareVersions: $(compareVersions)
         dockerVersion: $(dockerVersion)
+      inputs:
+        script: |
+          source my_venv/bin/activate
+          chmod 755 ci/compare_versions
+          dos2unix ci/compare_versions
+          ./ci/compare_versions
+          echo "##vso[task.setvariable variable=dockerVersion]"$(cat version.txt)""
+
+    - task: CmdLine@2
+      displayName: Build Python package
+      condition: always()
+      env: 
         setupBatchkit: $(setupBatchkit)
         setupExamples: $(setupExamples)
       inputs:
         script: |
           source my_venv/bin/activate
-          chmod 755 ci/parse_package_versions
-          dos2unix ci/parse_package_versions ci/build_packages
-          echo Verifying Python package versions updated
-          ./ci/parse_package_versions
-          echo "##vso[task.setvariable variable=dockerVersion]"$(cat version.txt)""
-          echo Building Python packages
+          dos2unix ci/build_packages
           . ci/build_packages
+
     - task: CmdLine@2
       displayName: Execute batchkit Python package unit and stress tests
       condition: always()
@@ -83,13 +91,15 @@ stages:
           echo Executing unit tests
           ./run-tests
           echo Executing stress tests
-          echo $(systemctl)
-          ps -eo 'tty,pid,comm' | grep ^?
-          ls /etc/security 
-          ls /etc/systemd
-          printf "\n*                hard    nofile          1000000" | sudo tee -a /etc/security/limits.conf
-          printf "[MANAGER]\nDefaultLimitNOFILE=1000000" | sudo tee -a /etc/systemd/system.conf.d/nofile.conf
-          python run-stress-tests.py
+          sudo bash -c "python temp.py"
+          
+          # echo $(systemctl)
+          # ps -eo 'tty,pid,comm' | grep ^?
+          # ls /etc/security 
+          # ls /etc/systemd
+          # printf "\n*                hard    nofile          1000000" | sudo tee -a /etc/security/limits.conf
+          # printf "[MANAGER]\nDefaultLimitNOFILE=1000000" | sudo tee -a /etc/systemd/system.conf.d/nofile.conf
+          # python run-stress-tests.py
           # sudo bash -c "ulimit -n 1000000 1000000; source my_venv/bin/activate; python run-stress-tests.py" 
 
     # DOCKER
@@ -110,7 +120,7 @@ stages:
         buildContext: $(Build.Repository.LocalPath)
         tags: |
           test
-          $(docker_version)
+          $(dockerVersion)
         arguments: --build-arg BATCHKIT_EXAMPLES_PKG=$(pypiExamples)
 
     - task: CmdLine@2
@@ -152,5 +162,7 @@ stages:
         tags: |
           test
         # $(dockerVersion)
+
+
 # use env to map secret variables to an env variable with bash and Powershell scripts
 # secret variables must be called with $() notation outside of bash and Powershell script tasks
