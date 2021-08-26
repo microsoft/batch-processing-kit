@@ -13,7 +13,7 @@ container_port="5000"
 response_1="response_1.json"
 response_2="response_2.json"
 temp_vol="test_vol"
-containerRegistryName="joshcacr.azurecr.io"
+# containerRegistryName="joshcacr.azurecr.io"
 
 # pull speech-to-text Docker image
 docker pull $sttImageName
