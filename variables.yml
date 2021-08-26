@@ -11,4 +11,4 @@ variables:
   dockerVersion: ""
   setupBatchkit: "setup_batchkit.py"
   setupExamples: "setup_examples.py"
-  pypiBatchkit: 'batchkit' # double quotes makes secret var ***
+  pypiBatchkit: 'batchkit'

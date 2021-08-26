@@ -132,7 +132,8 @@ stages:
     # RELEASE PIPELINE TASKS
     - task: CmdLine@2
       displayName: Publish Python packages
-      condition: in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI')
+      # condition: in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI')
+      condition: always()
       env: 
         PYPI_API_TOKEN: $(PYPI_API_TOKEN)
         TEST_PYPI_API_TOKEN: $(TEST_PYPI_API_TOKEN)
