@@ -91,15 +91,6 @@ stages:
           echo Executing unit tests
           ./run-tests
           echo Executing stress tests
-          sudo bash -c "python temp.py"
-          
-          # echo $(systemctl)
-          # ps -eo 'tty,pid,comm' | grep ^?
-          # ls /etc/security 
-          # ls /etc/systemd
-          # printf "\n*                hard    nofile          1000000" | sudo tee -a /etc/security/limits.conf
-          # printf "[MANAGER]\nDefaultLimitNOFILE=1000000" | sudo tee -a /etc/systemd/system.conf.d/nofile.conf
-          # python run-stress-tests.py
           # sudo bash -c "ulimit -n 1000000 1000000; source my_venv/bin/activate; python run-stress-tests.py" 
 
     # DOCKER
@@ -109,6 +100,7 @@ stages:
       inputs:
         containerRegistry: $(containerRegistry)
         command: 'login'
+
     - task: Docker@2
       displayName: Build Docker image
       condition: always()
@@ -124,17 +116,17 @@ stages:
         arguments: --build-arg BATCHKIT_EXAMPLES_PKG=$(pypiExamples)
 
     - task: CmdLine@2
-      displayName: Execute Speech Batch Kit sanity test
+      displayName: Execute Speech Batch Kit integration test
       condition: always()
       env: 
         containerRegistryName: $(containerRegistryName)
       inputs:
         script: |
           source my_venv/bin/activate
-          chmod 755 ci/speech_batch_kit_sanity_test
-          dos2unix ci/speech_batch_kit_sanity_test
+          chmod 755 ci/integration_test
+          dos2unix ci/integration_test
           pushd ci
-          ./speech_batch_kit_sanity_test
+          ./integration_test
           popd
 
     # RELEASE PIPELINE TASKS
@@ -151,6 +143,7 @@ stages:
           python -m pip install --upgrade pip
           twine check dist/*
           twine upload --repository testpypi dist/* -u __token__ -p $TEST_PYPI_API_TOKEN
+          
     - task: Docker@2
       displayName: Push Docker image
       # condition: in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI')

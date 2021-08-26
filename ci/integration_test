@@ -10,8 +10,10 @@ stt_on_prem_2="stt-onprem-2"
 docker_port_1="5000"
 docker_port_2="5001"
 container_port="5000"
+response_1="response_1.json"
+response_2="response_2.json"
 temp_vol="test_vol"
-# containerRegistryName="joshcacr.azurecr.io"
+containerRegistryName="joshcacr.azurecr.io"
 
 # pull speech-to-text Docker image
 docker pull $sttImageName
@@ -20,14 +22,18 @@ docker pull $sttImageName
 docker run --name $stt_on_prem_1 -it -d --rm -p $docker_port_1:$container_port --memory 4g --cpus 2 $sttImageName eula=accept Billing='https://westus2.api.cognitive.microsoft.com/sts/v1.0/issuetoken' Apikey='28c6cec5a7544cf8b1f7cf3427d4be09'
 docker run --name $stt_on_prem_2 -it -d --rm -p $docker_port_2:$container_port --memory 4g --cpus 2 $sttImageName eula=accept Billing='https://westus2.api.cognitive.microsoft.com/sts/v1.0/issuetoken' Apikey='28c6cec5a7544cf8b1f7cf3427d4be09'
 
-# get IP addresses of speech-to-text containers when available
+# Poll until both endpoint IP addresses of speech-to-text containers active
 finished=0
 while [[ $finished != 1 ]]; do
-    response=$(curl --write-out '%{http_code}' --silent --output /dev/null "http://localhost:$docker_port_1/ready")
+    response=$(curl --write-out '%{http_code}' --silent --output $response_1 "http://localhost:$docker_port_1/status")
     if [ $response = "200" ]; then
-        let finished=1
-        ip1=$(docker inspect $stt_on_prem_1 --format '{{ .NetworkSettings.IPAddress }}')
-        echo "INFO: Fetched IP address of first speech-to-text container"
+        api_status=$(cat $response_1 | jq .apiStatus)
+        api_status_message=$(cat $response_1 | jq .apiStatusMessage)
+        if [[ "$api_status" == *"Valid"* ]] && [[ "$api_status_message" == *"valid"* ]]; then
+            let finished=1
+            ip1=$(docker inspect $stt_on_prem_1 --format '{{ .NetworkSettings.IPAddress }}')
+            echo "INFO: Fetched IP address of first speech-to-text container"
+        fi
     else
         echo "INFO: Waiting for first speech-to-text container to start"
     fi
@@ -36,38 +42,32 @@ done
 
 finished=0
 while [[ $finished != 1 ]]; do
-    response=$(curl --write-out '%{http_code}' --silent --output /dev/null "http://localhost:$docker_port_2/ready")
+    response=$(curl --write-out '%{http_code}' --silent --output $response_2 "http://localhost:$docker_port_2/status")
     if [ $response = "200" ]; then
-        let finished=1
-        ip2=$(docker inspect $stt_on_prem_2 --format '{{ .NetworkSettings.IPAddress }}')
-        echo "INFO: Fetched IP address of second speech-to-text container"
+        api_status=$(cat $response_2 | jq .apiStatus)
+        api_status_message=$(cat $response_2 | jq .apiStatusMessage)
+        if [[ "$api_status" == *"Valid"* ]] && [[ "$api_status_message" == *"valid"* ]]; then
+            let finished=1
+            ip2=$(docker inspect $stt_on_prem_2 --format '{{ .NetworkSettings.IPAddress }}')
+            echo "INFO: Fetched IP address of second speech-to-text container"
+        fi
     else
         echo "INFO: Waiting for second speech-to-text container to start"
     fi
     sleep 0.1
 done
 
-
-# rename sanity_test to integration_test
-# change .wav to 5-10 sec file
-# change concurrency to 5 on each endpoint
-# loop 200 times across single .wav file to make copies
-# make copies with symlink (ln -s). hardlink or softlink works. NOT scp / cpp
-# after this but before docker run, write while loop that polls for endpoint status as shown in "speech_sdk/endpoint_status.py"
-# goal is to mimic behavior of code below and check that 1) endpoint "status" returns 200 code, 2) ApiStatus and ApiStatusMessage include "valid". see below
-# this will replace 2x "/ready" checks above
-    # status_url = "http://{0}:{1}/status".format(host, port)
-    # result = requests.get(status_url)
-    # result = json.loads(result.text)
-    # if 'valid' in result['apiStatus'].lower() and 'valid' in result['apiStatusMessage'].lower():
-    #     return True
-
-
-
 # update config.yaml with speech container IP addresses 
 pushd $temp_vol
 
-sudo rm -f test_config.yaml
+# Create 200 copies of sample audio file
+i=0
+num_copies=200
+while (( "$i" <= "$num_copies" )); do
+    ln test_audio_files/sample_audio.wav test_audio_files/sample_audio_$i.wav
+    i=$((i+1))
+done
+
 echo "MyContainer1:
   concurrency: 5
   host: $ip1
@@ -86,7 +86,6 @@ EXIT=false
 
 # fetch the number of IP address endpoints, number of audio files that were successfully processed, and total number of processed audio files from the speech-batch-kit container logs
 # if container did not start properly, all of the commands below will fail, and task will exit 
-num_endpoints=$(sudo jq .overall_summary.audio_stats.num_endpoints run_summary.json)
 audio_files_passed=$(sudo jq .overall_summary.file_stats.passed run_summary.json)
 audio_files_total=$(sudo jq .overall_summary.file_stats.total run_summary.json)
 if [ $? != 0 ]; then
@@ -95,31 +94,56 @@ if [ $? != 0 ]; then
 fi
 
 # verify that speech-batch-kit container ran as expected. container ran as expected if...
-    # container processed audio files using both of the instantiated speech-to-text containers
+    # container processed audio files using both speech-to-text containers
     # all processed audio files passed successfully 
-if [ $num_endpoints = "2" ] && [ $audio_files_passed = $audio_files_total ]
+if [ $audio_files_passed = $audio_files_total ]
 then 
-    echo "INFO: Speech Batch Kit sanity test passed"
-elif [ $num_endpoints = "2" ] && [ $audio_files_passed != $audio_files_total ] 
-then
-    echo "ERROR: Speech Batch Kit sanity test failed. $audio_files_passed out of $audio_files_total audio files were successfully processed"
-    EXIT=true
-elif [ $num_endpoints != "2" ] && [ $audio_files_passed = $audio_files_total ]
-then 
-    echo "ERROR: Speech Batch Kit sanity test failed. $num_endpoints (not 2) endpoint was used to process audio files"
+    unique_ips=""
+    num_unique_ips=0
+    i=0
+    while (( "$i" < "$audio_files_passed" )); do
+        endpoint=$(jq .processed_files[$i].endpoint run_summary.json)
+        endpoint="${endpoint##*/}"
+        endpoint="${endpoint%:*}"
+        if [[ "$unique_ips" != *"$endpoint"* ]]
+        then 
+            unique_ips=$unique_ips"$endpoint, "
+            num_unique_ips=$((num_unique_ips+1))
+        fi
+        i=$((i+1))
+    done
+else 
+    echo "ERROR: Speech Batch Kit integration test failed. $audio_files_passed out of $audio_files_total audio files were successfully processed"
     EXIT=true
 fi
+
+if [ "$num_unique_ips" = "2" ]
+then 
+    echo "INFO: Speech Batch Kit integration test passed"
+else
+    echo "ERROR: Speech Batch Kit integration test failed. 1 (not 2) endpoint was used to process audio files"
+    EXIT=true
+fi
+
 popd
 
-# sanity test complete
-# clean up environment by stopping and removing on-premise speech-to-text Docker containers 
-sudo rm -rf $temp_vol/logs $temp_vol/transcriptions 
+# integration test complete. clean up environment
+echo "INFO: Integration test complete. Cleaning up environment"
+sudo rm -rf $temp_vol/logs $temp_vol/transcriptions $temp_vol/test_config.yaml $response_1 $response_2 
+
+# Delete sample audio file hardlinks
+i=0
+while (( "$i" <= "$num_copies" )); do
+    rm $temp_vol/test_audio_files/sample_audio_$i.wav
+    i=$((i+1))
+done
+
 docker stop $stt_on_prem_1
 docker stop $stt_on_prem_2
 echo "INFO: Deleted bind mount directory and stopped on-premise speech-to-text Docker containers"
 
-# exit pipeline if error occurred during sanity test
-if [ $EXIT = true ]
+# exit pipeline if error occurred during integration test
+if [[ $EXIT = true ]]
 then 
     exit 1
 fi
