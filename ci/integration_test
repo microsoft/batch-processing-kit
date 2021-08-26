@@ -102,7 +102,7 @@ then
     num_unique_ips=0
     i=0
     while (( "$i" < "$audio_files_passed" )); do
-        endpoint=$(jq .processed_files[$i].endpoint run_summary.json)
+        endpoint=$(sudo jq .processed_files[$i].endpoint run_summary.json)
         endpoint="${endpoint##*/}"
         endpoint="${endpoint%:*}"
         if [[ "$unique_ips" != *"$endpoint"* ]]
@@ -124,8 +124,6 @@ else
     echo "ERROR: Speech Batch Kit integration test failed. $audio_files_passed out of $audio_files_total audio files were successfully processed"
     EXIT=true
 fi
-
-
 
 popd
 
