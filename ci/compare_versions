@@ -1,0 +1,42 @@
+#!/bin/bash
+
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+# pypiBatchkit="batchkit"
+# compareVersions="master"
+
+if [ "$compareVersions" = "pr" ]
+then 
+    # pushing to pull request, so check version against current commit to master
+    HASH=$(git log --pretty=format:"%H" --first-parent origin/master | head -n 1)
+else
+    # pushing to master, so check version against previous commit to master
+    HASH=$(git log --pretty=format:"%H" --first-parent origin/master | head -n 2 | tail -n 1)
+fi
+
+BATCHKIT_OLD=$(git show $HASH:version.txt)
+BATCHKIT_NEW=$(cat version.txt)
+COMPARE=$(python -c "from ci import compare_versions; compare_versions.compare_versions('$BATCHKIT_NEW', '$BATCHKIT_OLD')")
+
+if [ "$compareVersions" = "pr" ]
+then 
+    echo INFO: Master \'$pypiBatchkit\' is version \'$BATCHKIT_OLD\'. \'$pypiBatchkit\' pushed to pull request is version \'$BATCHKIT_NEW\'
+else 
+    echo INFO: Previous master \'$pypiBatchkit\' is version \'$BATCHKIT_OLD\'. \'$pypiBatchkit\' pushed to master is version \'$BATCHKIT_NEW\'
+fi 
+
+if [ "$COMPARE" = "0" ]
+then 
+    if [ "$compareVersions" = "pr" ]
+    then 
+        echo ERROR: Increment Python package version for \'$pypiBatchkit\'. Package version is same as package version in master
+    else 
+        echo ERROR: Increment Python package version for \'$pypiBatchkit\'. Package version is same as package version in previous commit to master
+    exit 1
+    fi
+elif [ "$COMPARE" = "-1" ]
+then 
+    echo ERROR: Invalid version format
+    exit 1
+fi

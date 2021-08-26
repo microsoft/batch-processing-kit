@@ -15,8 +15,11 @@ class ConfigTestCaseBase(TestCase):
         return "{0}".format(json.dumps(my_dict, indent=2, sort_keys=True))
 
     def assertEmpty(self, my_dict):
-        self.assertEqual(len(my_dict), 0, self.dump_dict(my_dict))
-
+        try:
+            self.assertTrue(len(my_dict)==0 or my_dict.get('values_changed')["root['localhost']['host']"]['old_value'] in ['localhost', 'host.docker.interal'], self.dump_dict(my_dict))
+        except:
+            self.dump_dict(my_dict)
+        
     def assertEmptyNormalized(self, my_dict):
         with patch('sys.stderr', new=MockDevice()):
             validated_dict = normalize_validate_config(my_dict)

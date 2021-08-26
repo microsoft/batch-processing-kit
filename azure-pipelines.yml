@@ -1,0 +1,157 @@
+trigger:
+  branches:
+    include:
+    - master
+  paths:
+    exclude:
+    - CODE_OF_CONDUCT.md
+    - CONTRIBUTING.md
+    - LICENSE
+    - README.md
+    - SECURITY.md
+pr:
+  branches:
+    include:
+    - master
+  paths:
+    exclude:
+    - CODE_OF_CONDUCT.md
+    - CONTRIBUTING.md
+    - LICENSE
+    - README.md
+    - SECURITY.md
+
+resources:
+- repo: self
+
+variables:
+  - template: variables.yml
+
+stages:
+- stage: BuildTestRelease 
+  displayName: Build, Test, and Release Python packages and Docker image in single stage
+  jobs:   
+  - job: BuildTestRelease
+    displayName: Build, Test, and Release Python packages and Docker image in single job
+    pool:
+      vmImage: $(vmImageName)
+    steps:
+
+    # BUILD AND TEST PIPELINE TASKS
+    - task: CmdLine@2
+      displayName: Setup Python virtual environment and install required packages Python package
+      inputs:
+        script: |
+          sudo apt-get update -y
+          sudo apt-get upgrade -y
+          sudo apt-get install -y python3-venv dos2unix python-is-python3
+          python -m venv my_venv
+          source my_venv/bin/activate
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install twine wheel yolk3k semver
+
+    # PYTHON
+    - task: CmdLine@2
+      displayName: Verify version incremented
+      env: 
+        pypiBatchkit: $(pypiBatchkit)
+        compareVersions: $(compareVersions)
+        dockerVersion: $(dockerVersion)
+      inputs:
+        script: |
+          source my_venv/bin/activate
+          chmod 755 ci/compare_versions ci/compare_versions.py
+          dos2unix ci/compare_versions version.txt
+          ./ci/compare_versions
+          echo "##vso[task.setvariable variable=dockerVersion]"$(cat version.txt)""
+
+    - task: CmdLine@2
+      displayName: Build Python package
+      condition: always()
+      env: 
+        setupBatchkit: $(setupBatchkit)
+        setupExamples: $(setupExamples)
+      inputs:
+        script: |
+          source my_venv/bin/activate
+          dos2unix ci/build_packages
+          . ci/build_packages
+
+    - task: CmdLine@2
+      displayName: Execute batchkit Python package unit and stress tests
+      condition: always()
+      inputs:
+        script: |
+          source my_venv/bin/activate
+          sudo apt-get install -y --no-install-recommends python3 python3-pip python3-dev libglib2.0 libgirepository1.0 libasound2 sox libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly python3-gst-1.0 gcc libcairo2-dev pkg-config gir1.2-gtk-3.0         
+          pip install pycairo PyGObject       
+          chmod 755 run-stress-tests.py run-tests
+          dos2unix run-tests
+          echo Executing unit tests
+          ./run-tests
+          echo Executing stress tests
+          # sudo bash -c "ulimit -n 1000000 1000000; source my_venv/bin/activate; python run-stress-tests.py" 
+
+    # DOCKER
+    - task: Docker@2
+      displayName: Login to Docker
+      condition: always()
+      inputs:
+        containerRegistry: $(containerRegistry)
+        command: 'login'
+
+    - task: Docker@2
+      displayName: Build Docker image
+      condition: always()
+      inputs:
+        command: build
+        repository: $(imageName)
+        Dockerfile: batchkit_examples/speech_sdk/Dockerfile
+        containerRegistry: $(containerRegistry)
+        buildContext: $(Build.Repository.LocalPath)
+        tags: |
+          test
+          $(dockerVersion)
+        arguments: --build-arg BATCHKIT_EXAMPLES_PKG=$(pypiExamples)
+
+    - task: CmdLine@2
+      displayName: Execute Speech Batch Kit integration test
+      condition: always()
+      env: 
+        containerRegistryName: $(containerRegistryName)
+      inputs:
+        script: |
+          source my_venv/bin/activate
+          chmod 755 ci/integration_test
+          dos2unix ci/integration_test
+          pushd ci
+          ./integration_test
+          popd
+
+    # RELEASE PIPELINE TASKS
+    - task: CmdLine@2
+      displayName: Publish Python packages
+      # condition: in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI')
+      condition: always()
+      env: 
+        PYPI_API_TOKEN: $(PYPI_API_TOKEN)
+        TEST_PYPI_API_TOKEN: $(TEST_PYPI_API_TOKEN)
+      inputs:
+        script: |
+          source my_venv/bin/activate
+          python -m pip install --upgrade pip
+          chmod 755 ci/publish_packages ci/compare_requirements.py
+          dos2unix ci/publish_packages
+          ./ci/publish_packages
+
+    - task: Docker@2
+      displayName: Push Docker image
+      condition: in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI')
+      inputs:
+        command: push
+        repository: $(imageName)
+        containerRegistry: $(containerRegistry)
+        tags: |
+          test
+        # $(dockerVersion)

@@ -14,8 +14,7 @@ with open(os.path.join(rootdir, 'requirements.txt')) as reqs:
 deps = [line for line in required if len(line) > 0 and line[0] != "#"]
 
 # Get package version
-filename = "version.txt"
-with open(filename, "r") as f:
+with open("version.txt", "r") as f:
     version = f.read()   
 
 # Package specification that includes every example.

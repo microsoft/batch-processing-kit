@@ -352,6 +352,7 @@ class UnstableSDKTestCase(object):
                             for p in res['processed_files']:
                                 assert p['passed']
                                 files_done.add(p['filepath'])
+                        print(f"length of files_done: {len(files_done)}. length of all_contrived: {len(all_contrived)}")
                         assert files_done == all_contrived
 
                         # Check individual file results are in the output dir as anticipated.
