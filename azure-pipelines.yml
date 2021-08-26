@@ -132,8 +132,7 @@ stages:
     # RELEASE PIPELINE TASKS
     - task: CmdLine@2
       displayName: Publish Python packages
-      # condition: in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI')
-      condition: always()
+      condition: in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI')
       env: 
         PYPI_API_TOKEN: $(PYPI_API_TOKEN)
         TEST_PYPI_API_TOKEN: $(TEST_PYPI_API_TOKEN)
@@ -141,13 +140,12 @@ stages:
         script: |
           source my_venv/bin/activate
           python -m pip install --upgrade pip
-          twine check dist/*
-          twine upload --repository testpypi dist/* -u __token__ -p $TEST_PYPI_API_TOKEN
+          dos2unix ci/publish_packages
+          ./ci/integration_test
 
     - task: Docker@2
       displayName: Push Docker image
-      # condition: in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI')
-      condition: always()
+      condition: in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI')
       inputs:
         command: push
         repository: $(imageName)
@@ -155,7 +153,3 @@ stages:
         tags: |
           test
         # $(dockerVersion)
-
-
-# use env to map secret variables to an env variable with bash and Powershell scripts
-# secret variables must be called with $() notation outside of bash and Powershell script tasks

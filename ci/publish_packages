@@ -1,0 +1,29 @@
+#!/bin/bash
+
+batchkit_modified=False
+
+HASH=$(git log --pretty=format:"%H" --first-parent origin/master | head -n 2 | tail -n 1)
+DIFF=$(git diff $HASH --name-only)
+
+if [[ "$DIFF" == *"batchkit/"* ]]
+then
+    batchkit_modified=True
+elif [[ "$DIFF" == *"requirements.txt"* ]]
+then
+    COMPARE=$(python -c "from ci import compare_requirements; compare_requirements.compare_requirements('$HASH')")
+    if [ "$COMPARE" = "0" ]
+    then
+        batchkit_modified=True
+    fi
+fi
+
+if [[ "$batchkit_modified" == "False" ]]
+then
+    echo "INFO: No files in or requirements for 'batchkit' modified. Only publishing 'batchkit_examples_speechsdk' to PyPi"
+    twine check dist/batchkit_examples_speechsdk*
+    twine upload --repository testpypi dist/batchkit_examples_speechsdk* -u __token__ -p $TEST_PYPI_API_TOKEN
+else 
+    echo "INFO: Files for 'batchkit' modified. Publishing both 'batchkit' and 'batchkit_examples_speechsdk' to PyPi"
+    twine check dist/*
+    twine upload --repository testpypi dist/* -u __token__ -p $TEST_PYPI_API_TOKEN
+fi

@@ -28,8 +28,7 @@ for line in required:
         deps.append(line)
 
 # Get package version
-filename = "version.txt"
-with open(filename, "r") as f:
+with open("version.txt", "r") as f:
     version = f.read()  
 
 # Package specification for batchkit library.
