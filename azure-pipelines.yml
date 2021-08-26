@@ -62,7 +62,7 @@ stages:
         script: |
           source my_venv/bin/activate
           chmod 755 ci/compare_versions
-          dos2unix ci/compare_versions
+          dos2unix ci/compare_versions version.txt
           ./ci/compare_versions
           echo "##vso[task.setvariable variable=dockerVersion]"$(cat version.txt)""
 
@@ -143,7 +143,7 @@ stages:
           python -m pip install --upgrade pip
           twine check dist/*
           twine upload --repository testpypi dist/* -u __token__ -p $TEST_PYPI_API_TOKEN
-          
+
     - task: Docker@2
       displayName: Push Docker image
       # condition: in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI')

@@ -7,7 +7,7 @@
     # from pipeline cmd, do git diff to determine which files were actually modified between head and head-1
     # would still have GitHub repo versions match but would ONLY publish pypi package that was actually modified as determined by git diff
 
-# pypiBatchkit='batchkit'
+# pypiBatchkit="batchkit"
 # compareVersions="master"
 
 if [ "$compareVersions" = "pr" ]
