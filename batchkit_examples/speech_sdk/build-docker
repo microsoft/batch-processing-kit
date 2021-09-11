@@ -10,13 +10,13 @@ REL_SCRIPT_DIR=$(dirname "$0")
 SCRIPT_DIR=$(realpath "$REL_SCRIPT_DIR")
 pushd "${SCRIPT_DIR}/../.."
 
-echo cwd is `pwd`
-echo SCRIPT_DIR is $SCRIPT_DIR
+echo cwd is "$(pwd)"
+echo SCRIPT_DIR is "$SCRIPT_DIR"
 
 rm -rf ./dist/batchkit_examples-* ./build/lib/batchkit_examples ./build/scripts-* batchkit_examples.egg-info
 ./setup_examples.py sdist bdist_wheel
 BATCHKIT_EXAMPLES_PKG=$(./setup_examples.py --fullname | tr -d "\n")
 
-docker build "$@" -f "${SCRIPT_DIR}/Dockerfile" . --build-arg BATCHKIT_EXAMPLES_PKG="${BATCHKIT_EXAMPLES_PKG}" -t speech-batch-kit:test
+docker build "$@" -f "${SCRIPT_DIR}/Dockerfile" . --build-arg BATCHKIT_EXAMPLES_PKG="${BATCHKIT_EXAMPLES_PKG}" -t speech-batch-kit:"$(tr -d '\r\n' < ./version)"
 
 popd

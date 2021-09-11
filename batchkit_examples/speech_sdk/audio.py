@@ -2,6 +2,7 @@
 # Licensed under the MIT License.
 import gi
 import os
+from io import BufferedReader
 import tempfile
 import wave
 import azure.cognitiveservices.speech as speechsdk
@@ -13,7 +14,7 @@ gi.require_version('Gst', '1.0')
 from gi.repository import GObject, Gst
 
 native_extensions = [".wav"]
-conversion_extensions = [".mp3", ".flac", ".ogg", ".opus", ".alaw", ".mulaw"]
+conversion_extensions = [".mp3", ".flac", ".ogg", ".opus", ".alaw", ".mulaw", ".gsm"]
 
 
 class InvalidAudioFormatError(Exception):
@@ -88,6 +89,8 @@ def get_parser_decoder(audio_format, leq: LogEventQueue):
         return "wavparse ! mulawdec"
     elif audio_format == ".alaw":
         return "wavparse ! alawdec"
+    elif audio_format == ".gsm":
+        return "wavparse ! gsmdec"
     elif audio_format == ".opus":
         return "oggdemux ! opusdec"
     elif audio_format == ".ogg":
@@ -99,7 +102,7 @@ def get_parser_decoder(audio_format, leq: LogEventQueue):
         return None
 
 
-def convert_audio(audio_file, leq: LogEventQueue):
+def convert_audio(audio_file: str, leq: LogEventQueue):
     """
     Convert audio file if necessary
     :param audio_file: file to process
@@ -113,10 +116,42 @@ def convert_audio(audio_file, leq: LogEventQueue):
         try:
             wave.open(audio_file)
         except Exception as e:
+            resolved: bool = False
             if str(e) == "unknown format: 7":
                 ext = ".mulaw"
+                resolved = True
             elif str(e) == "unknown format: 6":
                 ext = ".alaw"
+                resolved = True
+            elif str(e) == 'unknown format: 49':
+                ext = ".gsm"
+                resolved = True
+            elif str(e) == "file does not start with RIFF id":
+                # The file is not a RIFF/WAV container.
+                # Check a few alternatives (grow this if necessary).
+                reader: BufferedReader
+                bites: bytes
+                with open(audio_file, 'rb') as reader:
+                    bites = reader.read(36)
+
+                # Ogg Container?
+                # Every Ogg page header has the Capture Pattern (magic number).
+                #          Ref: [https://en.wikipedia.org/wiki/Ogg#Page_structure]
+                if len(bites) >= 36 and bites[0:4] == b'OggS':
+                    # Opus coding?
+                    #     Ogg Opus Format: RFC 7845 [https://tools.ietf.org/html/rfc7845]
+                    #     Section 3 (Packet Organization): page 0 of the Ogg bitstream
+                    #       will exclusively contain a single packet (thus single segment)
+                    #       that is the Opus Identification Header that uniquely
+                    #       identifies the stream as Opus audio.
+                    #     Section 5.1:  Identification Header starts with 'OpusHead' ascii
+                    if bites[28:36] == b'OpusHead':
+                        ext = ".opus"
+                        resolved = True
+
+            if not resolved:
+                raise InvalidAudioFormatError(
+                    "Audio format for file {0} is not a wav and is unrecognized".format(audio_file))
 
     # Now convert the audio, if necessary
     if ext in conversion_extensions:
@@ -125,7 +160,7 @@ def convert_audio(audio_file, leq: LogEventQueue):
     elif ext == ".wav":
         converted_file = audio_file
     else:
-        raise InvalidAudioFormatError("Invalid source audio format {0} for file {1}".format(
+        raise InvalidAudioFormatError("Invalid audio format {0} for file {1}".format(
             ext[1:], audio_file))
 
     audio_duration = check_audio_file(converted_file)
