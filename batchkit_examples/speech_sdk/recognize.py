@@ -439,9 +439,13 @@ class FileRecognizer:
         speech_recognizer.canceled.connect(stop_continuous)
         speech_recognizer.session_stopped.connect(stop_continuous)
 
-        # Recognizer recognizing...
+        # Start continuous recognition.
+        # WORKAROUND: Speech SDK sometimes deadlocks on corrupt or valid zero-length wave files.
         start_time = time.time()
-        speech_recognizer.start_continuous_recognition()
+        if audio_duration - start_offset_secs > 0:
+            speech_recognizer.start_continuous_recognition()
+        else:
+            done_event.set()
 
         # Wait for the done event to be set, but check if it's because cancellation was triggered.
         # Add timeout to be safe from extremely rare but possible Speech SDK deadlock (workaround).

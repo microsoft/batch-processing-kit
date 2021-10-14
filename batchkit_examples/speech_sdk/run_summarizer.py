@@ -26,20 +26,21 @@ class SpeechSDKBatchRunSummarizer(BatchRunSummarizer):
                     num_endpoints: int,
                     log_conclusion_msg: bool) -> dict:
 
-        work_results_list = list(snap_work_results.values())
+        num_total = len(snap_work_results)
+        known_work_results = [res for res in snap_work_results.values() if res is not None]
 
         # Compute some metrics about the run
         total_audio = sum(
-            item.audio_duration for item in work_results_list if
+            item.audio_duration for item in known_work_results if
             item.passed and not item.cached and item.audio_duration is not None)
-        num_passed = sum(item.passed for item in work_results_list)
-        num_cached = sum(item.cached for item in work_results_list)
+        num_passed = sum(item.passed for item in known_work_results)
+        num_cached = sum(item.cached for item in known_work_results)
         # Files that have failed and are not being retried:
-        failed_files = [(item.endpoint, item.filepath) for item in work_results_list if
+        failed_files = [(item.endpoint, item.filepath) for item in known_work_results if
                         not item.passed and
                         (item.attempts - 1 >= ORCHESTRATOR_SCOPE_MAX_RETRIES or not item.can_retry)]
         # Files that have failed at least once but are being retried:
-        in_retry_files = [(item.endpoint, item.filepath) for item in work_results_list if
+        in_retry_files = [(item.endpoint, item.filepath) for item in known_work_results if
                           not item.passed and
                           item.can_retry and
                           item.attempts - 1 < ORCHESTRATOR_SCOPE_MAX_RETRIES]
@@ -47,10 +48,8 @@ class SpeechSDKBatchRunSummarizer(BatchRunSummarizer):
         num_in_retry = len(in_retry_files)
         elapsed = time.time() - start_time
         decode_ratio = total_audio / elapsed
-        num_in_que = snap_file_queue_size
-        num_total = num_passed + num_failed_terminal + num_in_que + snap_num_running
         total_retries = 0
-        work_results_list = [w.to_dict() for w in work_results_list]
+        work_results_list = [w.to_dict() for w in known_work_results]
         for w in work_results_list:
             w['retries'] = w['attempts'] - 1
             total_retries += w['retries']
@@ -68,7 +67,7 @@ class SpeechSDKBatchRunSummarizer(BatchRunSummarizer):
                     "passed": num_passed,
                     "failed": num_failed_terminal,
                     "in_retry": num_in_retry,
-                    "queued": num_in_que,
+                    "queued": snap_file_queue_size,
                     "running": snap_num_running,
                     "cached": num_cached,
                     "total": num_total
