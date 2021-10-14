@@ -85,10 +85,15 @@ def check_server(*args, **kwargs):
 
 
 check_audio_file_original = batchkit_examples.speech_sdk.audio.check_audio_file
+convert_audio_original = batchkit_examples.speech_sdk.audio.convert_audio
 
 
-def check_audio_file(*args):
+def check_audio_file(*args) -> float:
     return audio_duration
+
+
+def convert_audio(audio_file: str, *args) -> (str, float):
+    return audio_file, audio_duration
 
 
 def contrived_audio_files_oneshot(num_audio_files, basepath, *args):
@@ -266,6 +271,7 @@ class UnstableSDKTestCase(object):
                                                                         tempdir_in)
                             batchkit.client.get_input_files = _contrived_audio_files_oneshot_fn
                             batchkit_examples.speech_sdk.audio.check_audio_file = check_audio_file
+                            batchkit_examples.speech_sdk.recognize.convert_audio = convert_audio
                         else:
                             _contrived_audio_files_daemon_init = contrived_audio_files_daemon_init(
                                 NUM_AUDIO_FILES, tempdir_in)
@@ -279,6 +285,7 @@ class UnstableSDKTestCase(object):
                             # Actual implementations.
                             batchkit.client.get_input_files = utils.get_input_files
                             batchkit_examples.speech_sdk.audio.check_audio_file = check_audio_file_original
+                            batchkit_examples.speech_sdk.recognize.convert_audio = convert_audio_original
 
                         # Reflect on batch-client src root directory.
                         root = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..')

@@ -152,7 +152,7 @@ def tee_to_pipe_decorator(func, pipe: Connection, suppress_reraise=True, pipe_vo
     def wrapped(*args, **kwargs):
         try:
             ret = func(*args, **kwargs)
-            if ret:
+            if ret is not None:
                 pipe.send(ret)
                 return ret
             # There was no exception and the return object is None means

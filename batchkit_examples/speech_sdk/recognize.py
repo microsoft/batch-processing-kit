@@ -245,7 +245,7 @@ class FileRecognizer:
             else:
                 # This is the case of regular successful return of the function
                 # so we expect a return value of just the audio_duration.
-                assert type(obj) == float
+                assert type(obj) in [float, int]
                 return obj
 
     def __recognize(self, audio_file, json_data, cancellation_token) -> float:
