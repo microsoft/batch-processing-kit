@@ -64,7 +64,7 @@ sample = os.path.join(
     test_root,
     'resources/whatstheweatherlike.wav'
 )
-audio_duration = batchkit_examples.speech_sdk.audio.check_wav_file(sample)
+audio_duration = batchkit_examples.speech_sdk.audio.check_audio_file(sample)
 
 # Read some json that we can produce for each segment final result (recognized event).
 sample_segment = os.path.join(
