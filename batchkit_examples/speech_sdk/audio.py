@@ -102,7 +102,7 @@ def get_parser_decoder(audio_format, leq: LogEventQueue):
         return None
 
 
-def convert_audio(audio_file: str, leq: LogEventQueue):
+def convert_audio(audio_file: str, leq: LogEventQueue) -> (str, float):
     """
     Convert audio file if necessary
     :param audio_file: file to process
@@ -167,7 +167,7 @@ def convert_audio(audio_file: str, leq: LogEventQueue):
     return converted_file, audio_duration
 
 
-def check_audio_file(audio_file):
+def check_audio_file(audio_file) -> float:
     """
     Check if the audio file contents and format match the needs of the speech service. Currently we only support
     16 KHz, 16 bit, MONO, PCM audio format. All others will be rejected.
@@ -180,7 +180,7 @@ def check_audio_file(audio_file):
             frame_rate = my_wave.getframerate()
             if frame_rate >= 8000 and my_wave.getnchannels() in [1, 2] \
                     and my_wave.getsampwidth() == 2 and my_wave.getcomptype() == 'NONE':
-                audio_duration = my_wave.getnframes() / frame_rate
+                audio_duration = float(my_wave.getnframes()) / float(frame_rate)
 
                 return audio_duration
             else:

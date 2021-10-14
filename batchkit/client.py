@@ -277,14 +277,21 @@ class Client(ABC):
         more violent signals, and can provide implementations for softer signals.
         """
         if signum == signal.SIGINT:
+            logger.critical("{0}:  Received SIGINT ({1}). Requesting Orchestrator to stop."
+                            .format(type(self).__name__, signum))
             # Any far downstream children processes unbeknown to us will die (eventually).
             self.orchestrator.request_stop()
             raise KeyboardInterrupt()
+        else:
+            logger.critical("Client:  Received Signal! (Not SIGINT). Signum: {1}. Deferring action to subtype handler."
+                            .format(type(self).__name__, signum))
 
     def finish(self):
-        logger.info("{0}:  Requesting Orchestrator to stop.".format(type(self).__name__))
+        logger.info("{0}:  Requesting Orchestrator to stop...".format(type(self).__name__))
         self.orchestrator.request_stop()
+        logger.info("{0}:  Joining with Orchestrator master thread...".format(type(self).__name__))
         self.orchestrator.join()
+        logger.info("{0}:  Joined with Orchestrator master thread.".format(type(self).__name__))
 
     def _do_batch_sync(self, files: List[str]) -> BatchStatus:
         """
@@ -360,6 +367,8 @@ class GenericClient(Client):
 
     def _handle_signal(self, signum, frame):
         super()._handle_signal(signum, frame)
+        logger.critical("{0}:  Received Signal. Signum: {1}. Will attempt to stop immediately."
+                        .format(type(self).__name__, signum))
         self._stop_evt.set()
 
     def requires_flask_functional(self):
@@ -513,16 +522,22 @@ class DaemonClient(Client):
         still get a run summary and result files are properly closed.
         """
         super()._handle_signal(signum, frame)
+        logger.critical("{0}:  Received Signal. Signum: {1}. Stop watch for new files. Stop creating new batches."
+                        .format(type(self).__name__, signum))
         self._work_notifier.stop()  # Don't be notified of new files.
-        self._stop_evt.set()        # Stop waiting for new batches.
+        self._stop_evt.set()        # Stop submitting new batches.
         if signum == signal.SIGHUP:
-            # We will finish batches already submitted.
+            # We will finish batches already submitted by not requesting orchestrator to stop.
+            logger.critical("{0}:  SIGHUP: Will wait for already submitted batches to finish."
+                            .format(type(self).__name__))
             return
 
         assert signum == signal.SIGTERM
         # Not only will we stop submitting new batches for new files,
         # we also tell the Orchestrator we want it to stop current batch prematurely.
-        self.orchestrator.request_stop()  # any batch watcher will finish quickly
+        logger.critical("{0}:  SIGTERM: Not waiting for submitted batches to finish. Shutting down now."
+                        .format(type(self).__name__))
+        self.orchestrator.request_stop()  # so any batch watcher will also finish quickly
         self._is_success = False
 
     def merge_combined_jsons(self, combined_result_files):
@@ -606,8 +621,10 @@ class OneShotClient(Client):
 
     def _handle_signal(self, signum, frame):
         super()._handle_signal(signum, frame)
-        # If we're here, we want a graceful stop and we just tell Orchestrator
+        # If we're here, we want a graceful stop asap and we just tell Orchestrator
         # the intention and expect it to prematurely finish the batch(es) it was doing.
+        logger.critical("{0}:  Received Signal. Signum: {1}. Requesting Orchestrator to stop."
+                        .format(type(self).__name__, signum))
         self.orchestrator.request_stop()
 
     def _singleton_run_summary_path(self):

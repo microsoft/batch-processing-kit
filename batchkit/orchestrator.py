@@ -72,7 +72,8 @@ class Orchestrator:
         self._file_queue_size: int = 0
         self._in_progress: Dict[str, WorkItemRequest] = {}  # WorkItemRequest.filepath -> WorkItemRequest
         self._in_progress_owner: Dict[str, EndpointManager] = {}  # WorkItemRequest.filepath -> EndpointManager
-        self._work_results: Dict[str, WorkItemResult] = {}  # WorkItemRequest.filepath -> WorkItemResult
+        self._work_results: Dict[str, Optional[WorkItemResult]] = {}  # WorkItemRequest.filepath -> WorkItemResult
+                                                                      # None value implies no attempt started.
         self._batch_completion_evt = Event()
         self._accounting_lock = RLock()
         self._file_queue_cond = Condition(self._accounting_lock)
@@ -203,7 +204,7 @@ class Orchestrator:
             # Take a consistent snapshot and then report on the snapshot
             # without holding back forward progress.
             with self._accounting_lock:
-                snap_work_results: Dict[str, WorkItemResult] = copy.deepcopy(self._work_results)
+                snap_work_results: Dict[str, Optional[WorkItemResult]] = copy.deepcopy(self._work_results)
                 snap_file_queue_size: int = self._file_queue_size
                 snap_num_running: int = len(self._in_progress)
                 snap_run_summarizer: BatchRunSummarizer = self._summarizer
@@ -353,12 +354,13 @@ class Orchestrator:
         return work
 
     def _merge_results(self, filepath: str, result: WorkItemResult):
-        if filepath not in self._work_results:
-            self._work_results[filepath] = result
-        else:
-            prev_attempts = self._work_results[filepath].attempts
-            result.attempts += prev_attempts
-            self._work_results[filepath] = result
+        with self._accounting_lock:
+            if filepath not in self._work_results or not self._work_results[filepath]:
+                self._work_results[filepath] = result
+            else:
+                prev_attempts = self._work_results[filepath].attempts
+                result.attempts += prev_attempts
+                self._work_results[filepath] = result
 
     def notify_work_success(self, filepath: str, manager: EndpointManager, result: WorkItemResult):
         with self._accounting_lock:
@@ -587,6 +589,7 @@ class Orchestrator:
                         self._log_folder):
                     self._file_queue.put(work)
                     self._file_queue_size += 1
+                    self._work_results[work.filepath] = None
                 self._file_queue_cond.notify_all()
 
             # Ensure this batch has not since been canceled.
