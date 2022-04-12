@@ -9,7 +9,9 @@ from multiprocessing import current_process
 from functools import wraps
 from typing import List, Optional
 import wave
-import grpc
+import json
+
+from threading import Event
 
 from batchkit.logger import LogEventQueue, LogLevel
 from batchkit.utils import sha256_checksum, write_json_file_atomic, \
@@ -20,12 +22,9 @@ from batchkit_examples.speech_sdk.audio import init_gstreamer, convert_audio, Wa
 from .work_item import LangIdWorkItemRequest, LangIdWorkItemResult
 from .endpoint_status import LangIdEndpointStatusChecker
 
-from . import pb2
-from .pb2 import (
-    LIDRequestMessage, AudioConfig, LanguageIdStub, IdentifierConfig_pb2, IdentifierConfig, FinalResultMessage,
-    IdentificationCompletedMessage
-)
-
+# Dependency Injection permitting mocked behavior of the SDK.
+# If desirable, this must be a function that imports the module.
+speechsdk_provider = None
 
 def classify_file_retry(run_classifier_function):
     """
@@ -330,41 +329,114 @@ class FileRecognizer:
         return self._audio_duration
 
     def _segment(self, audio_file: str, cancellation_token: multiprocessing.Event):
-        channel = grpc.insecure_channel(self._host)
-        stub = LanguageIdStub(channel)
+        # @TODO: Confining module import to here limits terminal process fault risk to only the process
+        # in which this method executes, at the tradeoff of measured 10-100 ms cpu. This lazy load of the
+        # speech sdk means global static state of the library is totally confined. This can be removed
+        # out of request scope if term faults are never caused by sdk.
+        global speechsdk_provider
+        if speechsdk_provider:
+            speechsdk = speechsdk_provider()
+        else:
+            import azure.cognitiveservices.speech as speechsdk
+
         segments = []
 
-        for resp in stub.Identify(self._generate_messages(audio_file, cancellation_token)):
-            if resp.WhichOneof('message') == 'final_result':
-                response: FinalResultMessage = resp.final_result
-                self._log_event_queue.debug("Segment identified for file {0}: {1}".format(audio_file, response))
-                segments.append([
-                    response.locale,
-                    float(response.start_offset_ms) / 1000.0,
-                    float(response.end_offset_ms) / 1000.0
-                ])
-            elif resp.WhichOneof('message') == 'identification_completed':
-                response: IdentificationCompletedMessage = resp.identification_completed
-                if response.end_reason == IdentificationCompletedMessage.ERROR:
-                    self._log_event_queue.warning(
-                        "LID service had internal error while processing file {0}: {1}".format(audio_file, response))
-                    # TODO(andwald): Can output results we did get thus far and enable picking up progress in retry.
-                    raise FailedRecognitionError("LID service internal error.")
-                elif response.end_reason == IdentificationCompletedMessage.AUDIOEND:
-                    self._log_event_queue.info(
-                        "LID service finished segmenting file {0}: {1}".format(audio_file, response))
+        speech_config = speechsdk.SpeechConfig(host="ws://{0}".format(self._host))
+        # Throttle to provided RTF. Throttle from the beginning.
+        speech_config.set_property_by_name("SPEECH-AudioThrottleAsPercentageOfRealTime", "1000")
+        speech_config.set_property_by_name("SPEECH-TransmitLengthBeforThrottleMs", "0")
+
+        # Make the buffers larger than default.
+        speech_config.set_property_by_name("SPEECH-MaxBufferSizeSeconds", "1800")
+        # speech_config.set_property(speechsdk.PropertyId.Speech_LogFilename, "/d/temp/carbon.log")
+
+        # Set the Priority (default Latency, either Latency or Accuracy is accepted)
+        speech_config.set_property(property_id=speechsdk.PropertyId.SpeechServiceConnection_ContinuousLanguageIdPriority, value='Accuracy')
+        auto_detect_source_language_config = speechsdk.languageconfig.AutoDetectSourceLanguageConfig(languages=self.request.candidate_languages)
+        audio_config = speechsdk.audio.AudioConfig(filename=audio_file)
+
+        source_language_recognizer = speechsdk.SourceLanguageRecognizer(
+            speech_config=speech_config, 
+            auto_detect_source_language_config=auto_detect_source_language_config, 
+            audio_config=audio_config)
+
+        done_event = Event()
+
+        def stop_continuous(evt):
+            """
+            callback that stops continuous recognition upon receiving an event 'evt'.
+            :param evt: event listened to stop speech recognizing
+            """
+            nonlocal done_event, audio_file
+            source_language_recognizer.stop_continuous_recognition()
+            if evt.result.reason == speechsdk.ResultReason.Canceled and \
+                    evt.cancellation_details.reason == speechsdk.CancellationReason.Error:
+                error_details = str(evt.cancellation_details)
+                self._log_event_queue.warning(
+                    "Error transcribing {0}, details: {1}".format(audio_file, error_details))
+                raise FailedRecognitionError("LID service internal error.")
+            done_event.set()
+
+        def language_recognized(evt):
+            """
+            callback that catches the recognized result of audio from an event 'evt'.
+            :param evt: event listened to catch recognition result.
+            """
+            nonlocal segments, cancellation_token, audio_file
+            if evt.result.reason == speechsdk.ResultReason.RecognizedSpeech:
+                if evt.result.properties.get(speechsdk.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult) == None:
+                    self._log_event_queue.debug(
+                        "Could not determine language event for file: {0} sent by endpoint: {1} handled by process: {2}".format(
+                            audio_file, self._host, current_process().name
+                        )
+                    )
                 else:
-                    self._log_event_queue.info(
-                        "LID service returned unexpected end reason for file {0}: {1}".format(audio_file, response))
-                    raise FailedRecognitionError("LID service unexpected end reason: {0}.".format(response))
+                    locale = evt.result.properties[speechsdk.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult]
+                    jsonResult = evt.result.properties[speechsdk.PropertyId.SpeechServiceResponse_JsonResult]
+                    detailResult = json.loads(jsonResult)
+                    startOffset = detailResult['Offset']
+                    duration = detailResult['Duration']
+                    if duration >= 0:
+                        endOffset = duration + startOffset
+                    else:
+                        endOffset = 0
+
+                    start_offset_ms = startOffset / 10000.0
+                    end_offset_ms = endOffset / 10000.0
+                    duration_ms = duration / 10000.0
+                    self._log_event_queue.debug("Segment identified for file {0}: {1}".format(
+                        audio_file,
+                        "Detected language = {0}, startOffset = {1}ms, endOffset = {2}ms, Duration = {3}ms.".format(locale, start_offset_ms, end_offset_ms, duration_ms)))
+
+                    segments.append([
+                        locale,
+                        start_offset_ms / 1000.0,
+                        end_offset_ms / 1000.0
+                    ])
 
             # Before going to next msg, check for cancellation.
             if cancellation_token.is_set():
                 msg = "Canceled during language segmentation on file: {0} on process {1} " \
-                      "targeting {2} by cancellation token (in middle).".format(
+                    "targeting {2} by cancellation token (in middle).".format(
                         self.request.filepath, current_process().name, self._host)
                 self._log_event_queue.info(msg)
                 raise CancellationTokenException(msg)
+
+        # Connect callbacks to the events fired by the speech recognizer
+        # Catch recognized result of audio file
+        source_language_recognizer.recognized.connect(language_recognized)
+
+        # Stop continuous recognition on canceled event, which we are guaranteed to get on a file
+        source_language_recognizer.canceled.connect(stop_continuous)
+        source_language_recognizer.session_stopped.connect(stop_continuous)
+
+        source_language_recognizer.start_continuous_recognition()
+
+        while True:
+            if done_event.wait(timeout=1e9):
+                break
+
+        source_language_recognizer.stop_continuous_recognition()
 
         return segments
 
@@ -385,37 +457,6 @@ class FileRecognizer:
             sampwidth = fd.getsampwidth()
             if sampwidth != 2:
                 raise InvalidAudioFormatError("LID currently only compatible with 16-bit samples.")
-
-    def _generate_messages(self, audio_file: str, cancellation_token: multiprocessing.Event):
-        self._validate_file_format(audio_file)
-
-        # Config message first.
-        message = LIDRequestMessage()
-        message.config.audio_config.encoding = AudioConfig.PCM
-        message.config.audio_config.sample_type = AudioConfig.SAMPLE_S16LE
-        message.config.audio_config.channels = AudioConfig.MONO
-        message.config.identifier_config.mode = IdentifierConfig_pb2.SEGMENTATION
-        message.config.identifier_config.locales.extend(self.request.candidate_languages)
-        with wave.open(audio_file, 'rb') as fd:
-            # Determine the actual frame rate.
-            framerate = fd.getframerate()
-            if framerate == 16000:
-                message.config.audio_config.sample_rate = AudioConfig.SAMPLE_16KHZ
-            else:
-                message.config.audio_config.sample_rate = AudioConfig.SAMPLE_8KHZ
-            yield message
-
-            # Any number of audio payload messages follow the config message.
-            while True:
-                # If request has been canceled by framework, we will simply stop producing
-                # the request message stream and allow the response reader to throw the CancellationTokenException.
-                if cancellation_token.is_set():
-                    break
-                b = fd.readframes(2048)
-                if not b:
-                    break
-                message.audio_payload = b
-                yield message
 
     def get_cached_result(self, audio_file, dirs: List[str]):
         """
