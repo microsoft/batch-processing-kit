@@ -438,7 +438,30 @@ class FileRecognizer:
 
         source_language_recognizer.stop_continuous_recognition()
 
-        return segments
+        def compress_segments(segments: list):
+            compressed_segments = []
+            active_segment = None
+            for segment in segments:
+                if active_segment is None:
+                    active_segment = segment
+                elif segment[0] != active_segment[0]:
+                    compressed_segments.append(active_segment)
+                    active_segment = segment
+                else:
+                    active_segment[2] = segment[2]
+
+            if active_segment is not None:
+                compressed_segments.append(active_segment)
+
+            return compressed_segments
+
+        # This should happen in LID, we should not have to coallesce segments
+        compressed_segments = compress_segments(segments)
+
+        self._log_event_queue.debug("Raw segments: {0}".format(str(segments)))
+        self._log_event_queue.debug("Compressed segments: {0}".format(str(compressed_segments)))
+
+        return compressed_segments
 
     def _validate_file_format(self, audio_file):
         with wave.open(audio_file, 'rb') as fd:
