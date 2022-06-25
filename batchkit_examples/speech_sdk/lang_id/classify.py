@@ -14,11 +14,9 @@ import json
 from threading import Event
 
 from batchkit.logger import LogEventQueue, LogLevel
-from batchkit.utils import sha256_checksum, write_json_file_atomic, \
-    EndpointDownError, FailedRecognitionError, tee_to_pipe_decorator, CancellationTokenException, create_dir
+from batchkit.utils import write_json_file_atomic, EndpointDownError, FailedRecognitionError, tee_to_pipe_decorator, CancellationTokenException
 from batchkit.constants import RECOGNIZER_SCOPE_RETRIES
-from batchkit_examples.speech_sdk.audio import init_gstreamer, convert_audio, WavFileReaderCallback, \
-    InvalidAudioFormatError
+from batchkit_examples.speech_sdk.audio import init_gstreamer, convert_audio, InvalidAudioFormatError
 from .work_item import LangIdWorkItemRequest, LangIdWorkItemResult
 from .endpoint_status import LangIdEndpointStatusChecker
 
@@ -90,6 +88,7 @@ class FileRecognizer:
         self._host = "{0}:{1}".format(endpoint_config["host"], endpoint_config["port"])
         self._log_event_queue = log_event_queue
         self.request = request
+        self._throttle = str(round(rtf * 100))
 
         # Set lazily later.
         self._audio_duration: Optional[float] = None
@@ -269,15 +268,7 @@ class FileRecognizer:
                 "Failed language segmentation on file: {0} against endpoint: {1} on process: {2}.".format(
                     self.request.filepath, self._host, current_process().name))
 
-            # grpc errors are usually not picklable, so pull out the details.
-            if "Rendezvous" in type(e).__name__:
-                details = e.__str__()
-                if "details" in dir(e):
-                    details = "{0} {1}".format(details, e.details())  # noqa
-                raise FailedRecognitionError("grpc channel error: {0} {1}".format(type(e).__name__, details))
-            # Propagate any other exception through.
-            else:
-                raise e
+            raise e
 
         end_time = time.time()
         self._log_event_queue.info("Finished language segmentation on file: {0}; wall time taken: {1}s".format(
@@ -342,13 +333,13 @@ class FileRecognizer:
         segments = []
 
         speech_config = speechsdk.SpeechConfig(host="ws://{0}".format(self._host))
+
         # Throttle to provided RTF. Throttle from the beginning.
-        speech_config.set_property_by_name("SPEECH-AudioThrottleAsPercentageOfRealTime", "1000")
+        speech_config.set_property_by_name("SPEECH-AudioThrottleAsPercentageOfRealTime", self._throttle)
         speech_config.set_property_by_name("SPEECH-TransmitLengthBeforThrottleMs", "0")
 
         # Make the buffers larger than default.
         speech_config.set_property_by_name("SPEECH-MaxBufferSizeSeconds", "1800")
-        # speech_config.set_property(speechsdk.PropertyId.Speech_LogFilename, "/d/temp/carbon.log")
 
         # Set the Priority (default Latency, either Latency or Accuracy is accepted)
         speech_config.set_property(property_id=speechsdk.PropertyId.SpeechServiceConnection_ContinuousLanguageIdPriority, value='Accuracy')
@@ -432,34 +423,37 @@ class FileRecognizer:
 
         source_language_recognizer.start_continuous_recognition()
 
+        # Wait for the done_event almost indefinitely
+        timeout = 1e9
+
         while True:
-            if done_event.wait(timeout=1e9):
+            if done_event.wait(timeout=timeout):
                 break
 
         source_language_recognizer.stop_continuous_recognition()
 
-        def compress_segments(segments: list):
-            compressed_segments = []
-            active_segment = None
-            for segment in segments:
-                if active_segment is None:
-                    active_segment = segment
-                elif segment[0] != active_segment[0]:
-                    compressed_segments.append(active_segment)
-                    active_segment = segment
-                else:
-                    active_segment[2] = segment[2]
-
-            if active_segment is not None:
-                compressed_segments.append(active_segment)
-
-            return compressed_segments
-
         # This should happen in LID, we should not have to coallesce segments
-        compressed_segments = compress_segments(segments)
+        compressed_segments = self._compress_segments(segments)
 
         self._log_event_queue.debug("Raw segments: {0}".format(str(segments)))
         self._log_event_queue.debug("Compressed segments: {0}".format(str(compressed_segments)))
+
+        return compressed_segments
+
+    def _compress_segments(self, segments: list):
+        compressed_segments = []
+        active_segment = None
+        for segment in segments:
+            if active_segment is None:
+                active_segment = segment
+            elif segment[0] != active_segment[0]:
+                compressed_segments.append(active_segment)
+                active_segment = segment
+            else:
+                active_segment[2] = segment[2]
+
+        if active_segment is not None:
+            compressed_segments.append(active_segment)
 
         return compressed_segments
 

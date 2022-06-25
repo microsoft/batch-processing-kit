@@ -6,6 +6,7 @@ import sys
 import os
 import json
 from multiprocessing import Event
+from typing import Tuple
 import yaml
 import tempfile
 from random import random
@@ -93,7 +94,7 @@ def check_audio_file(*args) -> float:
     return audio_duration
 
 
-def convert_audio(audio_file: str, *args) -> (str, float):
+def convert_audio(audio_file: str, *args) -> Tuple[str, float]:
     return audio_file, audio_duration
 
 

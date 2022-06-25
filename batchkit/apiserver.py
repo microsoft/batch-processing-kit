@@ -56,7 +56,7 @@ class ApiServer(object):
         (if add_flask_functional=True)
         Request body should contain a JSON dict like follows:
         {'files': ['/path/to/A', '/path/to/B', ...],
-         'type': '<SpeechSDKBatchRequest|GrpcBatchRequest>'
+         'type': '<SpeechSDKBatchRequest>'
          ... Other fields particular to the 'type' ...
         }
         Response body identical to status(batch_id) with the batch's new id assignment.
