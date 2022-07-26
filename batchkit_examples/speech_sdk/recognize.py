@@ -367,10 +367,10 @@ class FileRecognizer:
 
         # Throttle to provided RTF. Throttle from the beginning.
         speech_config.set_property_by_name("SPEECH-AudioThrottleAsPercentageOfRealTime", self._throttle)
-        speech_config.set_property_by_name("SPEECH-TransmitLengthBeforThrottleMs", "0")
+        speech_config.set_property_by_name("SPEECH-TransmitLengthBeforeThrottleMs", "0")
 
         # Make the buffers larger than default.
-        speech_config.set_property_by_name("SPEECH-MaxBufferSizeSeconds", "1800")
+        speech_config.set_property_by_name("SPEECH-MaxBufferSizeMs", "1800000")
 
         if self._log_folder is not None:
             base, ext = os.path.splitext(audio_file_basename)

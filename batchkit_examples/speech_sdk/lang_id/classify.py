@@ -336,10 +336,10 @@ class FileRecognizer:
 
         # Throttle to provided RTF. Throttle from the beginning.
         speech_config.set_property_by_name("SPEECH-AudioThrottleAsPercentageOfRealTime", self._throttle)
-        speech_config.set_property_by_name("SPEECH-TransmitLengthBeforThrottleMs", "0")
+        speech_config.set_property_by_name("SPEECH-TransmitLengthBeforeThrottleMs", "0")
 
         # Make the buffers larger than default.
-        speech_config.set_property_by_name("SPEECH-MaxBufferSizeSeconds", "1800")
+        speech_config.set_property_by_name("SPEECH-MaxBufferSizeMs", "1800000")
 
         # Set the Priority (default Latency, either Latency or Accuracy is accepted)
         speech_config.set_property(property_id=speechsdk.PropertyId.SpeechServiceConnection_ContinuousLanguageIdPriority, value='Accuracy')
@@ -364,7 +364,7 @@ class FileRecognizer:
                     evt.cancellation_details.reason == speechsdk.CancellationReason.Error:
                 error_details = str(evt.cancellation_details)
                 self._log_event_queue.warning(
-                    "Error transcribing {0}, details: {1}".format(audio_file, error_details))
+                    "Error classifying {0}, details: {1}".format(audio_file, error_details))
                 raise FailedRecognitionError("LID service internal error.")
             done_event.set()
 
