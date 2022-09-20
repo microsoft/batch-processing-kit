@@ -1,21 +1,17 @@
 import logging
 import sys
-import multiprocessing
-from multiprocessing import RLock
 from argparse import Namespace
 from typing import List, Dict
 from unittest import TestCase
 
 from batchkit.batch_config import BatchConfig
 from batchkit.batch_request import BatchRequest
-from batchkit.logger import LogEventQueue
 from batchkit.run_summarizer import BatchRunSummarizer
 from batchkit.work_item import WorkItemRequest, WorkItemResult
 from batchkit.work_item_processor import WorkItemProcessor, StubWorkItemProcessor
 
 logger = logging.getLogger("test_dependency_injection")
-# logger.level = logging.DEBUG
-logger.level = logging.INFO
+logger.level = logging.INFO  # logging.DEBUG
 log_stream_handler = logging.StreamHandler(sys.stdout)
 
 
@@ -38,11 +34,6 @@ class TWorkItemRequest(WorkItemRequest):
         super().__init__(filepath)
         self.output_dir = output_dir
         self.some_int = some_int
-
-    def process_impl(self, endpoint_config: dict, rtf: float,
-                     log_event_queue: LogEventQueue, cancellation_token: multiprocessing.Event,
-                     global_workitem_lock: RLock):
-        log_event_queue.info("Did the work")
 
 
 class TBatchRunSummarizer(BatchRunSummarizer):

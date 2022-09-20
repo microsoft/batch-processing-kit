@@ -6,7 +6,7 @@ import errno
 import time
 import traceback
 import multiprocessing
-from multiprocessing import Lock, RLock, Condition, Event, Queue
+from multiprocessing import Lock, RLock, Condition, Event
 from multiprocessing.process import current_process
 from threading import Thread
 from typing import Dict, Optional, List
@@ -62,11 +62,12 @@ class Orchestrator:
                                           args=(()),
                                           daemon=True)
 
-        #TODO(andwald): The following hypothetical thread dynamically sets RTF and Concurrency of EndpointManagers
+        # TODO(andwald): The following hypothetical thread dynamically sets RTF and Concurrency of EndpointManagers
         #               according to its own decoupled logic. This will be nice and pluggable since EndpointManagers
         #               already adhere to whatever the dynamic settings are for the Atomic Shared Variables of
         #               RTF and Concurrency, which is what this thread will manipulate.
-        # self._perf_thread = Thread(target=self.perf_thread_loop, name="OrchestratorPerfThread", args=(self,), daemon=True)
+        # self._perf_thread = Thread(
+        #   target=self.perf_thread_loop, name="OrchestratorPerfThread", args=(self,), daemon=True)
 
         self._file_queue: WorkItemQueue = WorkItemQueue(log_event_que)
         self._file_queue_size: int = 0
@@ -79,7 +80,7 @@ class Orchestrator:
         self._file_queue_cond = Condition(self._accounting_lock)
         self._run_summary_lock = Lock()
         self._misc_lock = Lock()
-        self._summarizer: BatchRunSummarizer = None
+        self._summarizer: BatchRunSummarizer = None  # noqa
         self._stop_requested = False
 
         # Batchkit framework offers work items a global (Orchestrator-level) reentrant lock for
@@ -138,6 +139,7 @@ class Orchestrator:
         This is only intended to be used during development and debugging. The reported numbers are not
         thread-safe so this is only intended to be used in a deadlock scenario.
         """
+
         def _check_lock_acq(lock):
             acquired = lock.acquire(block=False)
             if acquired:
@@ -437,8 +439,8 @@ class Orchestrator:
                 ep_status_checker = UnknownEndpointStatusChecker(self._log_event_que)
                 work_item_processor = StubWorkItemProcessor()
             else:
-                ep_status_checker = self._on_batch_type.get_endpoint_status_checker(self._log_event_que)
-                work_item_processor = self._on_batch_type.get_work_item_processor()
+                ep_status_checker = self._on_batch_type.get_endpoint_status_checker(self._log_event_que)  # noqa
+                work_item_processor = self._on_batch_type.get_work_item_processor()  # noqa
 
             try:
                 # Determine EndpointManagers that need to be deleted (modified, new,
@@ -454,9 +456,9 @@ class Orchestrator:
                     # Also require that the endpoint's manager is not terminally stopped, and also require its
                     # WorkItemProcessor type shouldn't change, otherwise we need a new instance of it anyway.
                     if endpoint_name in deleted_managers and \
-                      endpoint_config == deleted_managers[endpoint_name].endpoint_config and \
-                      type(deleted_managers[endpoint_name].work_item_processor) == type(work_item_processor) and \
-                      not deleted_managers[endpoint_name]._stop_requested:  # noqa
+                            endpoint_config == deleted_managers[endpoint_name].endpoint_config and \
+                            type(deleted_managers[endpoint_name].work_item_processor) == type(work_item_processor) and \
+                            not deleted_managers[endpoint_name]._stop_requested:  # noqa
                         # Don't delete this EndpointManager and don't make a new one.
                         del deleted_managers[endpoint_name]
                         continue

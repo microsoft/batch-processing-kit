@@ -102,4 +102,6 @@ class SpeechSDKBatchRequest(BatchRequest):
 
     @staticmethod
     def is_valid_input_file(file: str) -> bool:
-        return audio.is_valid_audio_file(file)
+        # A valid input file for a work item is either an audio file or a language segment file pointing to an
+        # audio file with start/end offsets and language.
+        return audio.is_valid_audio_file(file) or file.endswith(".seg.json")

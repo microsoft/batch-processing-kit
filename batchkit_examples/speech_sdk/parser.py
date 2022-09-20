@@ -3,7 +3,6 @@
 
 import argparse
 from argparse import Namespace
-import os
 import tempfile
 
 
@@ -88,8 +87,14 @@ def create_parser():
         help="diarization mode selection"
     )
     parser.add_argument(
-        '-language', '--language',
-        default='en-US', help="language selection"
+        '-language', '--language', nargs='+', default="en-US",
+        help="Space-separated list of candidate languages for transcription.\n"
+             "   Example:  --language en-US  \n"
+             "   Example:  --language en-US fr-FR de-DE  \n"
+             "If exactly one language is provided, no language segmentation is performed and you do not need "
+             "Language Identification (LID) endpoints in your config. With two or more languages, you must have at "
+             "least one LID endpoint listed in your config available for multi-language segmentation to run first. "
+             "Each LID endpoint should be marked with language 'lid' in the endpoint config."
     )
     parser.add_argument(
         '-strict_config', '--strict-configuration-validation',
@@ -121,6 +126,13 @@ def create_parser():
              "Applies to --run-mode DAEMON only."
     )
     parser.add_argument(
+        '-max_segment_length', '--max-segment-length',
+        default=3600, type=check_positive,
+        help="[Applies when multiple --language given only]."
+             "Cap the maximum audio segment length produced during language segmentation. "
+             "Longer segments will be broken up into smaller ones. Unit: positive integer seconds."
+    )
+    parser.add_argument(
         '-debug_loop_interval', '--debug-loop-interval',
         default=0, type=check_positive,
         help="Interval in seconds to re-log debug information about the batchkit's orchestration components. "
@@ -143,5 +155,11 @@ def parse_cmdline(args=None) -> Namespace:
 
     if args.scratch_folder is None:
         args.scratch_folder = tempfile.mkdtemp()
+
+    if isinstance(args.language, list) and args.run_mode != 'ONESHOT':
+        parser.error("Multi-language speech-batch-kit can only be used in ONESHOT mode in this version.")
+
+    if isinstance(args.language, str):
+        args.language = [args.language]
 
     return args

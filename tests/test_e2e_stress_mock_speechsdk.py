@@ -1,10 +1,12 @@
 import time
+from argparse import Namespace
 from collections import namedtuple
 from ctypes import cdll
 import sys
 import os
 import json
 from multiprocessing import Event
+from typing import Tuple
 import yaml
 import tempfile
 from random import random
@@ -92,7 +94,7 @@ def check_audio_file(*args) -> float:
     return audio_duration
 
 
-def convert_audio(audio_file: str, *args) -> (str, float):
+def convert_audio(audio_file: str, *args) -> Tuple[str, float]:
     return audio_file, audio_duration
 
 
@@ -341,7 +343,9 @@ class UnstableSDKTestCase(object):
                             )
                             file_drop_thread.start()
 
-                        run(parse_cmdline(args), SpeechSDKBatchConfig)
+                        parsed_args: Namespace = parse_cmdline(args)
+                        parsed_args.language = 'en-US'
+                        run(parsed_args, SpeechSDKBatchConfig)
                         cancellation.set()
 
                         if daemon_mode:

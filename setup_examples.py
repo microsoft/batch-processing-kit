@@ -28,7 +28,14 @@ setup(
     # Since batchkit_examples are located in the same repo as the batchkit lib, we can just depend on
     # the batchkit lib source directly. As an external project, we would instead take dependency
     # on the dependency `batchkit` wheel under `install_requires`.
-    packages=["batchkit", "batchkit_examples", "batchkit_examples/speech_sdk"],
+    packages=[
+        "batchkit",
+        "batchkit_examples",
+        "batchkit_examples/speech_sdk",
+        "batchkit_examples/speech_sdk/lang_id",
+        "batchkit_examples/speech_sdk/lang_id/proto",
+        "batchkit_examples/speech_sdk/multilanguage",
+    ],
     install_requires=deps,
     license="MIT",
     scripts=["batchkit_examples/speech_sdk/run-batch-client"],
