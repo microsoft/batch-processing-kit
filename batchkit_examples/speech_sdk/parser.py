@@ -156,7 +156,7 @@ def parse_cmdline(args=None) -> Namespace:
     if args.scratch_folder is None:
         args.scratch_folder = tempfile.mkdtemp()
 
-    if isinstance(args.language, list) and args.run_mode != 'ONESHOT':
+    if isinstance(args.language, list) and len(args.language) > 1 and args.run_mode != 'ONESHOT':
         parser.error("Multi-language speech-batch-kit can only be used in ONESHOT mode in this version.")
 
     if isinstance(args.language, str):
