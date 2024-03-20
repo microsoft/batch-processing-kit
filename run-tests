@@ -8,6 +8,6 @@ ROOT_DIR="`dirname \"$0\"`"
 ROOT_DIR="`( cd \"$MY_PATH\" && pwd )`"
 pushd $ROOT_DIR || exit
 
-python -m unittest discover -v tests -t "${ROOT_DIR}"
+python3 -m unittest discover -v tests -t "${ROOT_DIR}"
 
 popd
