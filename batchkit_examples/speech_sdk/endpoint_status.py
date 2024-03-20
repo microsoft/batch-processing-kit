@@ -41,6 +41,8 @@ class SpeechSDKEndpointStatusChecker(EndpointStatusChecker):
                     result = json.loads(result.text)
                     if 'valid' in result['apiStatus'].lower() and 'valid' in result['apiStatusMessage'].lower():
                         return True
+                    elif 'nonmetered' in result['apiStatus'].lower() or 'non-metered' in result['apiStatusMessage'].lower():
+                        return True
                     else:
                         self.log_event_queue.warning(
                             "Currently failing to connect to {0} on port {1}. "
