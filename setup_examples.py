@@ -33,7 +33,6 @@ setup(
         "batchkit_examples",
         "batchkit_examples/speech_sdk",
         "batchkit_examples/speech_sdk/lang_id",
-        "batchkit_examples/speech_sdk/lang_id/proto",
         "batchkit_examples/speech_sdk/multilanguage",
     ],
     install_requires=deps,
