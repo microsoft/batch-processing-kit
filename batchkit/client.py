@@ -120,7 +120,7 @@ def run(cmd_args: Namespace, batch_type: type):
     batch_config: config_type = getattr(config_type, "from_args")(cmd_args)
 
     # Make sure prereqs exist.
-    if run_mode != "APISERVER":
+    if run_mode != "APISERVER" or cmd_args.output_folder and len(cmd_args.output_folder) > 0:
         create_dir(cmd_args.output_folder)
     create_dir(cmd_args.scratch_folder)
     assert_file_exists(settings.config_file)
@@ -390,7 +390,38 @@ class GenericClient(Client):
 
         Note: Should be invoked by a main or daemonic thread.
         """
-        self._stop_evt.wait()
+        if self.settings.output_folder and len(self.settings.output_folder) > 0:
+            while not self._stop_evt.wait(5):
+                assert self.orchestrator.is_alive()
+                # copy files from self.status_provider.scratch to output_folder
+                logger.info("{0}:  Moving files (intermediate): {1} -> {2}".format(
+                    type(self).__name__, self.status_provider.scratch, self.settings.output_folder))
+                move_files(
+                    self.status_provider.scratch,
+                    self.settings.output_folder,
+                    ".json",
+                    allow_fail=True  # In case of slow NFS sync. Will be retried later.
+                )
+            logger.info("{0}:  Moving files (final): {1} -> {2}".format(
+                type(self).__name__, self.status_provider.scratch, self.settings.output_folder))
+            # This final move must succeed so we give constant back-off time for NFS sync.
+            retries = 0
+            while True:
+                try:
+                    move_files(self.status_provider.scratch, self.settings.output_folder, ".json", allow_fail=False)
+                    break
+                except OSError as err:
+                    retries += 1
+                    if retries == 15:
+                        logger.error(
+                            "{0}: Could not move all results from "
+                            "scratch to output: {1}".format(type(self).__name__, err))
+                        break
+                    logger.warning("{0}:  Sleeping before move_files() retry.".format(type(self).__name__))
+                    time.sleep(10)  # Generous for NFS sync worth not failing the batch.
+        else:
+            self._stop_evt.wait()
+        logger.info("{0}: API Server is finished.".format(type(self).__name__))
         self.finish()
         return True
 
