@@ -5,7 +5,7 @@
 #  - Build with working directory set to the repo root.
 #  - libgstreamer and plugins need to be installed explicitly here as they are not available as simple pypi packages.
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -y && \
     apt-get upgrade -y && \
