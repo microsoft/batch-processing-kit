@@ -16,3 +16,4 @@ venv/
 
 # PyCharm associated
 .idea/
+/.vs
