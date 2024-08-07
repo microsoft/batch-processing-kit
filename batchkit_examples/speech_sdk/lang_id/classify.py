@@ -342,7 +342,7 @@ class FileRecognizer:
         speech_config.set_property_by_name("SPEECH-MaxBufferSizeMs", "1800000")
 
         # Set the Priority (default Latency, either Latency or Accuracy is accepted)
-        speech_config.set_property(property_id=speechsdk.PropertyId.SpeechServiceConnection_ContinuousLanguageIdPriority, value='Accuracy')
+        speech_config.set_property(property_id=speechsdk.PropertyId.SpeechServiceConnection_LanguageIdMode, value='AtStart')
         auto_detect_source_language_config = speechsdk.languageconfig.AutoDetectSourceLanguageConfig(languages=self.request.candidate_languages)
         audio_config = speechsdk.audio.AudioConfig(filename=audio_file)
 
