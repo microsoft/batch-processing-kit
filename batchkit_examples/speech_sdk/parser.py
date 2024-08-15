@@ -32,7 +32,7 @@ def create_parser():
     parser.add_argument(
         '-output_folder', '--output-folder',
         default="/usr/local/batch/output",
-        help='Folder to store transcriptions and logs. Use with --run-mode ONESHOT or DAEMON.'
+        help='Folder to store transcriptions and logs. Use with --run-mode ONESHOT, DAEMON and APISERVER'
     )
     parser.add_argument(
         '-input_folder', '--input-folder',
