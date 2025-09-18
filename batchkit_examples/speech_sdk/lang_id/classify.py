@@ -249,7 +249,28 @@ class FileRecognizer:
             self._validate_file_format(self._converted_audio_file)
             self._log_event_queue.debug("Starting language segmentation on file: {0}".format(self.request.filepath))
 
-            lang_segments = self._segment(self._converted_audio_file, cancellation_token)
+            # Add retry logic for _segment function in case of timeout
+            max_retries = max(1, self.request.recognize_retry) # Ensure at least one attempt
+            retry_count = 0
+            lang_segments = None
+
+            while retry_count < max_retries:
+                try:
+                    lang_segments = self._segment(self._converted_audio_file, cancellation_token)
+                    self._log_event_queue.info("Successfully segmented file {0} after {1} attempt(s)".format(self.request.filepath, retry_count + 1))
+                    break  # Success, exit retry loop
+                except TimeoutError as e:
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        self._log_event_queue.warning(
+                            f"Timeout occurred for file {self.request.filepath} (attempt {retry_count}/{max_retries}). Retrying..."
+                        )
+                        time.sleep(1)  # Brief delay before retry
+                    else:
+                        self._log_event_queue.error(
+                            f"Segmentation failed after {max_retries} attempts due to timeout for file {self.request.filepath}"
+                        )
+                        raise e
 
             # Corner case: when there is only a single language segment of language "unknown", the LID
             # backend has absolutely no idea how to even make a homogeneous language estimate. In this case
@@ -342,7 +363,7 @@ class FileRecognizer:
         speech_config.set_property_by_name("SPEECH-MaxBufferSizeMs", "1800000")
 
         # Set the Priority (default Latency, either Latency or Accuracy is accepted)
-        speech_config.set_property(property_id=speechsdk.PropertyId.SpeechServiceConnection_ContinuousLanguageIdPriority, value='Accuracy')
+        speech_config.set_property(property_id=speechsdk.PropertyId.SpeechServiceConnection_LanguageIdMode, value='AtStart')
         auto_detect_source_language_config = speechsdk.languageconfig.AutoDetectSourceLanguageConfig(languages=self.request.candidate_languages)
         audio_config = speechsdk.audio.AudioConfig(filename=audio_file)
 
@@ -423,12 +444,19 @@ class FileRecognizer:
 
         source_language_recognizer.start_continuous_recognition()
 
-        # Wait for the done_event almost indefinitely
-        timeout = 1e9
+        # Wait for the done_event with a timeout of 30 seconds
+        timeout = self.request.lid_timeout  # seconds
 
-        while True:
-            if done_event.wait(timeout=timeout):
-                break
+        if timeout > 0:
+            # If lid_timeout is set, wait for the done_event with a timeout
+            self._log_event_queue.debug("Lid thread timeout is set to {0} seconds".format(timeout))
+            if not done_event.wait(timeout=timeout):
+                raise TimeoutError(f"Segmentation process exceeded the timeout of {timeout} seconds.")
+        else:
+            self._log_event_queue.debug("Lid thread timeout isn't set, will wait indefinitely.")
+            while True:
+                if done_event.wait(timeout=timeout):
+                    break
 
         source_language_recognizer.stop_continuous_recognition()
 

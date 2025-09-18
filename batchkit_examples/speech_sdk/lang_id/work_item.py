@@ -11,12 +11,14 @@ from batchkit_examples.speech_sdk.work_item import SpeechSDKWorkItemResult
 
 class LangIdWorkItemRequest(WorkItemRequest):
     def __init__(self, filepath: str, candidate_languages: List[str], max_segment_length: int,
-                 cache_search_dirs: List[str], output_dir: str, log_dir: str):
+                 lid_timeout: int, recognize_retry: int, cache_search_dirs: List[str], output_dir: str, log_dir: str):
         """
         :param filepath: input audio file to recognize
         :param candidate_languages: superset of possible languages to consider
         :param max_segment_length: maximum length of language segments imposed by segmentation,
                                    and otherwise longer segments will be cut up.
+        :param lid_timeout: timeout for the language identification handling thread in seconds.
+        :param recognize_retry: number of retries for speech-to-text (STT) to complete for each audio file.
         :param output_dir: where wavptr's containing the file's language segments
                            will be placed.
         :param cache_search_dirs: directories where the language segment wavptr's may be
@@ -26,6 +28,8 @@ class LangIdWorkItemRequest(WorkItemRequest):
         super().__init__(filepath, 'lid')
         self.candidate_languages: List[str] = candidate_languages
         self.max_segment_length: int = max_segment_length
+        self.lid_timeout: int = lid_timeout
+        self.recognize_retry: int = recognize_retry
         self.cache_search_dirs: List[str] = cache_search_dirs
         self.output_dir: str = output_dir
         self.log_dir: str = log_dir

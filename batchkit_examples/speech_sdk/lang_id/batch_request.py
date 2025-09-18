@@ -20,10 +20,14 @@ class LangIdBatchRequest(BatchRequest):
     def __init__(self,
                  files: List[str],
                  languages: List[str],
-                 max_segment_length: int):
+                 max_segment_length: int,
+                 lid_timeout: int = 0,
+                 recognize_retry: int = 3):
         super().__init__(files, False)
         self.languages: List[str] = languages
         self.max_segment_length: int = max_segment_length
+        self.lid_timeout: int = lid_timeout
+        self.recognize_retry: int = recognize_retry
 
     def make_work_items(self, output_dir: str,
                         cache_search_dirs: List[str],
@@ -33,6 +37,8 @@ class LangIdBatchRequest(BatchRequest):
                 f,
                 self.languages,
                 self.max_segment_length,
+                self.lid_timeout,
+                self.recognize_retry,
                 cache_search_dirs,
                 output_dir,
                 log_dir,
@@ -50,12 +56,12 @@ class LangIdBatchRequest(BatchRequest):
                     not all([isinstance(x, str) for x in json[arg]]):
                 raise BadRequestError("Request body argument '{arg}' was not List[str]".format(arg=arg))
         # int args.
-        for arg in ['max_segment_length']:
+        for arg in ['max_segment_length', 'lid_timeout', 'recognize_retry']:
             if arg not in json:
                 raise BadRequestError("Missing '{arg}' argument (int) in request body.".format(arg=arg))
             if not isinstance(json[arg], int):
                 raise BadRequestError("Request body argument '{arg}' was not of type int".format(arg=arg))
-        return LangIdBatchRequest(json['files'], json['languages'], json['max_segment_length'])
+        return LangIdBatchRequest(json['files'], json['languages'], json['max_segment_length'], json['lid_timeout'], json['recognize_retry'])
 
     @staticmethod
     def from_config(files: List[str], config: LangIdBatchConfig):
@@ -63,6 +69,8 @@ class LangIdBatchRequest(BatchRequest):
             files,
             config.languages,
             config.max_segment_length,
+            config.lid_timeout,
+            config.recognize_retry
         )
 
     @staticmethod

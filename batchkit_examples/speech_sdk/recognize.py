@@ -115,6 +115,8 @@ class FileRecognizer:
         self._cache_search_dirs = list(request.cache_search_dirs)
         self._log_folder = request.log_dir
         self._allow_resume = request.allow_resume
+        self._recognize_timeout = request.recognize_timeout
+        self._recognize_retry = request.recognize_retry
         self._throttle = str(round(rtf * 100))
 
     def recognize(self, cancellation_token: multiprocessing.Event) -> SpeechSDKWorkItemResult:
@@ -197,14 +199,14 @@ class FileRecognizer:
         # Use pipe to receive pickled exceptions from child.
         parent_conn, child_conn = multiprocessing.Pipe()
         work_proc = multiprocessing.Process(
-            target=tee_to_pipe_decorator(FileRecognizer.__recognize, child_conn, pipe_void=True),
+            target=tee_to_pipe_decorator(FileRecognizer.__recognize_with_retries, child_conn, pipe_void=True),
             args=(self, audio_file, json_data, cancellation_token),
             daemon=True,
         )
         work_proc.name = current_process().name + "__SDKRequestChildProc"
         work_proc.start()
         self._log_event_queue.log(LogLevel.DEBUG,
-                                  "Starting FileRecognizer.__recognize() in subproc: {0}".format(work_proc.name))
+                                  "Starting FileRecognizer.__recognize_with_retries() in subproc: {0}".format(work_proc.name))
 
         # We can't do event-driven waitpid() until we know what we're waiting for.
         # > 99.9% of the time the pid be available before a single yield.
@@ -214,7 +216,7 @@ class FileRecognizer:
         _, status = os.waitpid(work_proc.pid, 0)
 
         self._log_event_queue.log(LogLevel.DEBUG,
-                                  "Finished FileRecognizer.__recognize() in subproc: {0}".format(work_proc.name))
+                                  "Finished FileRecognizer.__recognize_with_retries() in subproc: {0}".format(work_proc.name))
 
         if os.WIFSIGNALED(status):
             signum = os.WTERMSIG(status)
@@ -247,6 +249,31 @@ class FileRecognizer:
                 # so we expect a return value of just the audio_duration.
                 assert type(obj) in [float, int]
                 return obj
+
+    def __recognize_with_retries(self, audio_file, json_data, cancellation_token) -> float:
+        """
+        Recognize with retries on failure.
+        :param audio_file: original audio file to recognize
+        :param json_data: any result from a previous run of this file even if it was a failed transcription
+        :param cancellation_token multiprocessing.Event: to signal early exit.
+        :returns: If all went well, just an int containing the audio duration.
+                  The json result would already be written to file in that case.
+        """
+        max_retries = max(1, self._recognize_retry)  # at least one attempt
+        retry_count = 0
+        while retry_count < max_retries:
+            try:
+                result = self.__recognize(audio_file, json_data, cancellation_token)
+                self._log_event_queue.info("Successfully recognized file {0} after {1} attempt(s)".format(audio_file, retry_count + 1))
+                return result
+            except TimeoutError as e:
+                retry_count += 1
+                if retry_count < max_retries:
+                    self._log_event_queue.warning(f"Timeout occurred when recognizing file {audio_file} (attempt {retry_count}/{max_retries}). Retrying...")
+                    time.sleep(1)  # brief pause before retrying
+                else:
+                    self._log_event_queue.error(f"Recognizing failed after {max_retries} attempts due to timeout for file {audio_file}")
+                    raise e
 
     def __recognize(self, audio_file, json_data, cancellation_token) -> float:
         """
@@ -460,10 +487,22 @@ class FileRecognizer:
         else:
             done_event.set()
 
+        # recognize timeout = 0 means no timeout, otherwise it is the maximum time to wait for recognition to complete.
+        remaining_recognize_timeout = self._recognize_timeout
+        self._log_event_queue.log(LogLevel.INFO, f"Recognize timeout is set? {self._recognize_timeout > 0}. Remaining timeout: {remaining_recognize_timeout} seconds.")
+
         # Wait for the done event to be set, but check if it's because cancellation was triggered.
         # Add timeout to be safe from extremely rare but possible Speech SDK deadlock (workaround).
         # Timeout duration is a function of how much audio is left.
         while True:
+            if self._recognize_timeout > 0 and not done_event.is_set() and not cancellation_token.is_set() and time.time() - start_time >= remaining_recognize_timeout:
+                # If we are here, it means that the Speech SDK has not made any forward progress
+                # for a long time, and we need to stop waiting.
+                raise TimeoutError(f"Speech recognize process exceeded the timeout of {self._recognize_timeout} seconds.")
+
+            if self._recognize_timeout > 0:
+                self._log_event_queue.log(LogLevel.INFO, f"Remaining recognize timeout is {remaining_recognize_timeout} seconds.")
+            
             last_watermark: float = last_processed_offset_secs  # Race is okay.
             audio_remaining: float = audio_duration - last_watermark
             timeout: float
@@ -471,9 +510,12 @@ class FileRecognizer:
             if self._diarization == "None":
                 # Generous heuristic.
                 timeout = max(SPEECHSDK_RESULT_TIMEOUT, audio_remaining / (float(self._throttle)/100.0))
+                timeout = timeout if remaining_recognize_timeout == 0 else min(timeout, remaining_recognize_timeout)
+                remaining_recognize_timeout -= timeout
             else:
-                timeout = 1e9
+                timeout = 1e9 if self._recognize_timeout == 0 else remaining_recognize_timeout
 
+            self._log_event_queue.log(LogLevel.INFO, f"Waiting event done for {timeout} seconds.")
             if done_event.wait(timeout=timeout):
                 break
             if last_processed_offset_secs == last_watermark:

@@ -13,7 +13,8 @@ class SpeechSDKWorkItemRequest(WorkItemRequest):
     def __init__(self, filepath: str, language: str,
                  nbest: int, diarization: str, profanity: str,
                  cache_search_dirs: List[str], output_dir: str,
-                 log_dir: str, allow_resume: bool, enable_sentiment: bool):
+                 log_dir: str, allow_resume: bool, enable_sentiment: bool,
+                 recognize_timeout: int = 0, recognize_retry: int = 3):
         """
         :param filepath: input audio file to recognize
         :param language: language of the request
@@ -35,6 +36,8 @@ class SpeechSDKWorkItemRequest(WorkItemRequest):
         self.log_dir = log_dir
         self.allow_resume = allow_resume
         self.enable_sentiment = enable_sentiment
+        self.recognize_timeout = recognize_timeout
+        self.recognize_retry = recognize_retry
         self._cached_duration = None
 
     # override
